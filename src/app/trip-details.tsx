@@ -6,8 +6,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { useLocalSearchParams } from "expo-router";
-
+import { router, useLocalSearchParams } from "expo-router";
 import Card from "@/components/Card";
 import Button from "@/components/Button";
 import { getTrip, requestToJoinTrip } from "@/lib/api";
@@ -220,6 +219,19 @@ export default function TripDetailsScreen() {
             onPress={handleRequestToJoin}
           />
         </View>
+        <View className="mt-4">
+  <Button
+    title="View Join Requests"
+    onPress={() =>
+      router.push({
+        pathname: "/trip-requests",
+        params: {
+          tripId: trip.id,
+        },
+      })
+    }
+  />
+</View>
 
       </View>
     </ScrollView>

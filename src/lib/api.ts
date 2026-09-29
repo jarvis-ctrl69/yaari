@@ -159,3 +159,53 @@ export async function requestToJoinTrip(
 
   return result.request;
 }
+
+// request status
+
+export async function getTripRequests(tripId: string) {
+  const response = await fetch(
+    `${API_URL}/api/trip-requests/${tripId}`
+  );
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      result.message || "Failed to fetch trip requests"
+    );
+  }
+
+  return result.requests;
+}
+
+// accept / reject
+
+export async function updateTripRequest(
+  requestId: string,
+  status: "accepted" | "rejected",
+  userId: string
+) {
+  const response = await fetch(
+    `${API_URL}/api/trip-requests/${requestId}`,
+    {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        status,
+        user_id: userId,
+      }),
+    }
+  );
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      result.message || "Failed to update trip request"
+    );
+  }
+
+  return result.request;
+}

@@ -77,5 +77,116 @@ router.post("/", async (req, res) => {
     });
   }
 });
+// GET REQUESTS FOR A TRIP
+router.get("/:tripId", async (req, res) => {
+  try {
+    const { tripId } = req.params;
 
+    const result = await pool.query(
+      `
+      SELECT
+        trip_requests.*,
+        profiles.name AS requester_name,
+        profiles.company,
+        profiles.job_role,
+        profiles.city
+      FROM trip_requests
+      JOIN profiles
+        ON trip_requests.requester_id = profiles.id
+      WHERE trip_requests.trip_id = $1
+      ORDER BY trip_requests.created_at DESC
+      `,
+      [tripId]
+    );
+
+    return res.status(200).json({
+      success: true,
+      requests: result.rows,
+    });
+  } catch (error) {
+    console.error("Get trip requests error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch trip requests",
+    });
+  }
+});
+// ACCEPT OR REJECT A TRIP REQUEST
+router.patch("/:requestId", async (req, res) => {
+  try {
+    const { requestId } = req.params;
+    const { status, user_id } = req.body;
+
+    if (!user_id) {
+      return res.status(400).json({
+        success: false,
+        message: "User ID is required",
+      });
+    }
+
+    if (!["accepted", "rejected"].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: "Status must be accepted or rejected",
+      });
+    }
+
+    // Find the request and its trip creator
+    const requestResult = await pool.query(
+      `
+      SELECT
+        trip_requests.id,
+        trip_requests.trip_id,
+        trip_requests.requester_id,
+        trips.creator_id
+      FROM trip_requests
+      JOIN trips
+        ON trip_requests.trip_id = trips.id
+      WHERE trip_requests.id = $1
+      `,
+      [requestId]
+    );
+
+    if (requestResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Trip request not found",
+      });
+    }
+
+    const request = requestResult.rows[0];
+
+    // Only the trip creator can accept/reject
+    if (request.creator_id !== user_id) {
+      return res.status(403).json({
+        success: false,
+        message: "Only the trip creator can manage this request",
+      });
+    }
+
+    const result = await pool.query(
+      `
+      UPDATE trip_requests
+      SET status = $1
+      WHERE id = $2
+      RETURNING *
+      `,
+      [status, requestId]
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: `Request ${status} successfully`,
+      request: result.rows[0],
+    });
+  } catch (error) {
+    console.error("Update trip request error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update trip request",
+    });
+  }
+});
 export default router;
