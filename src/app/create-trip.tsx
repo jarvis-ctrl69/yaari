@@ -100,7 +100,7 @@ export default function CreateTripScreen() {
         [
           {
             text: "OK",
-            onPress: () => router.replace("/home"),
+            onPress: () => router.replace("/(tabs)"),
           },
         ]
       );

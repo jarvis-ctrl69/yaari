@@ -74,7 +74,7 @@ export default function ProfileSetupScreen() {
 
     setLoading(false);
     
-    router.replace("/home");
+    router.replace("/(tabs)");
 
   } catch (error) {
     console.error("Profile creation failed:", error);

@@ -65,7 +65,7 @@ export default function LoginScreen() {
       const profile = await getProfile(user.id);
 
       if (profile) {
-        router.replace("/home");
+        router.replace("/(tabs)");
       } else {
         router.replace("/profile-setup");
       }
