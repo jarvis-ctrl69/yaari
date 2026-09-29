@@ -84,10 +84,22 @@ export default function SignupScreen() {
     setError("");
     setLoading(true);
 
-    const { error: signupError } = await supabase.auth.signUp({
-  email: trimmedEmail,
-  password: trimmedPassword,
-});
+    const { data, error: signupError } =
+      await supabase.auth.signUp({
+        email: trimmedEmail,
+        password: trimmedPassword,
+
+        // Store only non-sensitive profile information.
+        // Aadhaar is intentionally NOT stored here.
+        options: {
+          data: {
+            name: trimmedName,
+            age: ageNumber,
+            gender: trimmedGender,
+            phone: trimmedPhone,
+          },
+        },
+      });
 
     setLoading(false);
 
@@ -95,6 +107,8 @@ export default function SignupScreen() {
       setError(signupError.message);
       return;
     }
+
+    console.log("Account created:", data.user?.id);
 
     router.push("/verify-email");
   };
@@ -273,14 +287,12 @@ export default function SignupScreen() {
         </Text>
       </View>
 
-      {/* Error */}
       {error ? (
         <Text className="mt-4 text-center text-sm font-semibold text-red-600">
           {error}
         </Text>
       ) : null}
 
-      {/* Continue */}
       <View className="mt-8">
         <Button
           title={loading ? "Creating Account..." : "Continue"}
@@ -288,7 +300,6 @@ export default function SignupScreen() {
         />
       </View>
 
-      {/* Gender Dropdown */}
       <Modal
         visible={genderDropdownOpen}
         transparent
@@ -315,9 +326,7 @@ export default function SignupScreen() {
               }}
               className="border-b border-gray-100 py-4"
             >
-              <Text className="text-base text-gray-900">
-                Male
-              </Text>
+              <Text className="text-base text-gray-900">Male</Text>
             </Pressable>
 
             <Pressable
@@ -328,9 +337,7 @@ export default function SignupScreen() {
               }}
               className="border-b border-gray-100 py-4"
             >
-              <Text className="text-base text-gray-900">
-                Female
-              </Text>
+              <Text className="text-base text-gray-900">Female</Text>
             </Pressable>
 
             <Pressable
@@ -341,9 +348,7 @@ export default function SignupScreen() {
               }}
               className="py-4"
             >
-              <Text className="text-base text-gray-900">
-                Other
-              </Text>
+              <Text className="text-base text-gray-900">Other</Text>
             </Pressable>
           </Pressable>
         </Pressable>

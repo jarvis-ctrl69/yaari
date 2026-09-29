@@ -1,3 +1,4 @@
+import { router } from "expo-router";
 import { useState } from "react";
 import {
   ScrollView,
@@ -9,6 +10,9 @@ import {
 import * as ImagePicker from "expo-image-picker";
 import Button from "@/components/Button";
 
+import { supabase } from "@/lib/supabase";
+import { createProfile } from "@/lib/api";
+
 export default function ProfileSetupScreen() {
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [company, setCompany] = useState("");
@@ -16,6 +20,8 @@ export default function ProfileSetupScreen() {
   const [city, setCity] = useState("");
   const [interests, setInterests] = useState("");
   const [bio, setBio] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -30,9 +36,53 @@ export default function ProfileSetupScreen() {
     }
   };
 
-  const handleContinue = () => {
-    console.log("Profile setup submitted");
-  };
+  const handleContinue = async () => {
+  setError("");
+  setLoading(true);
+
+  try {
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      setError("You must be logged in to create your profile.");
+      setLoading(false);
+      return;
+    }
+
+    const profile = await createProfile({
+      id: user.id,
+
+      // Information collected during signup
+      name: user.user_metadata?.name ?? "",
+      age: Number(user.user_metadata?.age ?? 0),
+      gender: user.user_metadata?.gender ?? "",
+      company_email: user.email ?? "",
+      phone: user.user_metadata?.phone ?? "",
+
+      // Information collected during profile setup
+      company,
+      job_role: jobRole,
+      city,
+      interests,
+      bio,
+    });
+
+    console.log("Profile created successfully:", profile);
+
+    setLoading(false);
+    
+    router.replace("/");
+
+  } catch (error) {
+    console.error("Profile creation failed:", error);
+
+    setLoading(false);
+    setError("Unable to save your profile. Please try again.");
+  }
+};
 
   return (
     <ScrollView
@@ -80,7 +130,10 @@ export default function ProfileSetupScreen() {
         <TextInput
           placeholder="Enter your company"
           value={company}
-          onChangeText={setCompany}
+          onChangeText={(text) => {
+            setCompany(text);
+            setError("");
+          }}
           className="rounded-xl border border-gray-200 bg-white px-4 py-4 text-base text-gray-900"
         />
       </View>
@@ -94,7 +147,10 @@ export default function ProfileSetupScreen() {
         <TextInput
           placeholder="e.g. Software Engineer"
           value={jobRole}
-          onChangeText={setJobRole}
+          onChangeText={(text) => {
+            setJobRole(text);
+            setError("");
+          }}
           className="rounded-xl border border-gray-200 bg-white px-4 py-4 text-base text-gray-900"
         />
       </View>
@@ -108,7 +164,10 @@ export default function ProfileSetupScreen() {
         <TextInput
           placeholder="Enter your city"
           value={city}
-          onChangeText={setCity}
+          onChangeText={(text) => {
+            setCity(text);
+            setError("");
+          }}
           className="rounded-xl border border-gray-200 bg-white px-4 py-4 text-base text-gray-900"
         />
       </View>
@@ -122,7 +181,10 @@ export default function ProfileSetupScreen() {
         <TextInput
           placeholder="e.g. Music, Sports, Technology"
           value={interests}
-          onChangeText={setInterests}
+          onChangeText={(text) => {
+            setInterests(text);
+            setError("");
+          }}
           className="rounded-xl border border-gray-200 bg-white px-4 py-4 text-base text-gray-900"
         />
       </View>
@@ -136,7 +198,10 @@ export default function ProfileSetupScreen() {
         <TextInput
           placeholder="Tell us about yourself"
           value={bio}
-          onChangeText={setBio}
+          onChangeText={(text) => {
+            setBio(text);
+            setError("");
+          }}
           multiline
           numberOfLines={4}
           textAlignVertical="top"
@@ -144,10 +209,17 @@ export default function ProfileSetupScreen() {
         />
       </View>
 
+      {/* Error */}
+      {error ? (
+        <Text className="mt-4 text-center text-sm font-semibold text-red-600">
+          {error}
+        </Text>
+      ) : null}
+
       {/* Continue */}
       <View className="mt-8">
         <Button
-          title="Continue"
+          title={loading ? "Saving Profile..." : "Continue"}
           onPress={handleContinue}
         />
       </View>

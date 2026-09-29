@@ -50,7 +50,7 @@ export default function LoginScreen() {
       return;
     }
 
-    router.replace("/");
+    router.replace("/profile-setup");
   };
 
   return (
