@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { View, Text, TextInput } from "react-native";
 import { router } from "expo-router";
+
 import Button from "@/components/Button";
 import { supabase } from "@/lib/supabase";
+import { getProfile } from "@/lib/api";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
@@ -37,20 +39,42 @@ export default function LoginScreen() {
     setError("");
     setLoading(true);
 
-    const { error: loginError } =
-      await supabase.auth.signInWithPassword({
-        email: trimmedEmail,
-        password,
-      });
+    try {
+      const { error: loginError } =
+        await supabase.auth.signInWithPassword({
+          email: trimmedEmail,
+          password,
+        });
 
-    setLoading(false);
+      if (loginError) {
+  console.log("SUPABASE LOGIN ERROR:", loginError);
+  setError(loginError.message);
+  return;
+}
 
-    if (loginError) {
-      setError(loginError.message);
-      return;
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError || !user) {
+        setError("Unable to get your user information.");
+        return;
+      }
+
+      const profile = await getProfile(user.id);
+
+      if (profile) {
+        router.replace("/home");
+      } else {
+        router.replace("/profile-setup");
+      }
+    } catch (error) {
+      console.error("Login failed:", error);
+      setError("Unable to complete login. Please try again.");
+    } finally {
+      setLoading(false);
     }
-
-    router.replace("/profile-setup");
   };
 
   return (

@@ -1,180 +1,176 @@
-import { Image } from 'expo-image';
-import { SymbolView } from 'expo-symbols';
-import { Platform, Pressable, ScrollView, StyleSheet } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
+import { router } from "expo-router";
 
-import { ExternalLink } from '@/components/external-link';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Collapsible } from '@/components/ui/collapsible';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
+import Card from "@/components/Card";
+import { getProfiles } from "@/lib/api";
 
-export default function TabTwoScreen() {
-  const safeAreaInsets = useSafeAreaInsets();
-  const insets = {
-    ...safeAreaInsets,
-    bottom: safeAreaInsets.bottom + BottomTabInset + Spacing.three,
+type Profile = {
+  id: string;
+  name: string;
+  age: number;
+  gender: string;
+  company_email: string;
+  phone: string;
+  company?: string;
+  job_role?: string;
+  city?: string;
+  interests?: string;
+  bio?: string;
+};
+
+export default function ExploreScreen() {
+  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    loadProfiles();
+  }, []);
+
+  const loadProfiles = async () => {
+    try {
+      setLoading(true);
+      setError("");
+
+      const data = await getProfiles();
+
+      setProfiles(data);
+    } catch (error) {
+      console.error("Failed to load profiles:", error);
+      setError("Unable to load profiles.");
+    } finally {
+      setLoading(false);
+    }
   };
-  const theme = useTheme();
-
-  const contentPlatformStyle = Platform.select({
-    android: {
-      paddingTop: insets.top,
-      paddingLeft: insets.left,
-      paddingRight: insets.right,
-      paddingBottom: insets.bottom,
-    },
-    web: {
-      paddingTop: Spacing.six,
-      paddingBottom: Spacing.four,
-    },
-  });
 
   return (
-    <ScrollView
-      style={[styles.scrollView, { backgroundColor: theme.background }]}
-      contentInset={insets}
-      contentContainerStyle={[styles.contentContainer, contentPlatformStyle]}>
-      <ThemedView style={styles.container}>
-        <ThemedView style={styles.titleContainer}>
-          <ThemedText type="subtitle">Explore</ThemedText>
-          <ThemedText style={styles.centerText} themeColor="textSecondary">
-            This starter app includes example{'\n'}code to help you get started.
-          </ThemedText>
+    <ScrollView className="flex-1 bg-gray-50">
+      <View className="px-5 pb-10 pt-16">
+        {/* Header */}
+        <Text className="text-3xl font-bold text-gray-900">
+          Explore
+        </Text>
 
-          <ExternalLink href="https://docs.expo.dev" asChild>
-            <Pressable style={({ pressed }) => pressed && styles.pressed}>
-              <ThemedView type="backgroundElement" style={styles.linkButton}>
-                <ThemedText type="link">Expo documentation</ThemedText>
-                <SymbolView
-                  tintColor={theme.text}
-                  name={{ ios: 'arrow.up.right.square', android: 'link', web: 'link' }}
-                  size={12}
-                />
-              </ThemedView>
+        <Text className="mt-2 text-base text-gray-500">
+          Discover people on Yaari
+        </Text>
+
+        {/* Loading */}
+        {loading && (
+          <View className="mt-10 items-center">
+            <ActivityIndicator size="large" />
+
+            <Text className="mt-3 text-gray-500">
+              Loading profiles...
+            </Text>
+          </View>
+        )}
+
+        {/* Error */}
+        {!loading && error !== "" && (
+          <View className="mt-8 rounded-2xl bg-red-50 p-5">
+            <Text className="text-center text-red-600">
+              {error}
+            </Text>
+          </View>
+        )}
+
+        {/* No profiles */}
+        {!loading &&
+          error === "" &&
+          profiles.length === 0 && (
+            <View className="mt-10 items-center">
+              <Text className="text-base text-gray-500">
+                No profiles found.
+              </Text>
+            </View>
+          )}
+
+        {/* Profiles */}
+        {!loading &&
+          error === "" &&
+          profiles.map((profile) => (
+            <Pressable
+              key={profile.id}
+              onPress={() =>
+                router.push({
+                  pathname: "/profile-details",
+                  params: {
+                    id: profile.id,
+                    name: profile.name,
+                    age: String(profile.age),
+                    gender: profile.gender,
+                    company: profile.company ?? "",
+                    job_role: profile.job_role ?? "",
+                    city: profile.city ?? "",
+                    interests: profile.interests ?? "",
+                    bio: profile.bio ?? "",
+                  },
+                })
+              }
+              className="mt-5"
+            >
+              <Card>
+                {/* Name */}
+                <Text className="text-xl font-bold text-gray-900">
+                  {profile.name}
+                </Text>
+
+                {/* Age + Gender */}
+                <Text className="mt-1 text-base text-gray-600">
+                  {profile.age} • {profile.gender}
+                </Text>
+
+                {/* Job */}
+                {profile.job_role && (
+                  <Text className="mt-3 text-base font-medium text-gray-800">
+                    {profile.job_role}
+                  </Text>
+                )}
+
+                {/* Company */}
+                {profile.company && (
+                  <Text className="mt-1 text-sm text-gray-600">
+                    {profile.company}
+                  </Text>
+                )}
+
+                {/* City */}
+                {profile.city && (
+                  <Text className="mt-3 text-sm text-gray-500">
+                    📍 {profile.city}
+                  </Text>
+                )}
+
+                {/* Interests */}
+                {profile.interests && (
+                  <Text className="mt-3 text-sm text-gray-600">
+                    Interests: {profile.interests}
+                  </Text>
+                )}
+
+                {/* Bio */}
+                {profile.bio && (
+                  <Text className="mt-3 text-sm leading-5 text-gray-600">
+                    {profile.bio}
+                  </Text>
+                )}
+
+                {/* View Profile */}
+                <Text className="mt-4 text-sm font-semibold text-blue-600">
+                  View Profile →
+                </Text>
+              </Card>
             </Pressable>
-          </ExternalLink>
-        </ThemedView>
-
-        <ThemedView style={styles.sectionsWrapper}>
-          <Collapsible title="File-based routing">
-            <ThemedText type="small">
-              This app has two screens: <ThemedText type="code">src/app/index.tsx</ThemedText> and{' '}
-              <ThemedText type="code">src/app/explore.tsx</ThemedText>
-            </ThemedText>
-            <ThemedText type="small">
-              The layout file in <ThemedText type="code">src/app/_layout.tsx</ThemedText> sets up
-              the tab navigator.
-            </ThemedText>
-            <ExternalLink href="https://docs.expo.dev/router/introduction">
-              <ThemedText type="linkPrimary">Learn more</ThemedText>
-            </ExternalLink>
-          </Collapsible>
-
-          <Collapsible title="Android, iOS, and web support">
-            <ThemedView type="backgroundElement" style={styles.collapsibleContent}>
-              <ThemedText type="small">
-                You can open this project on Android, iOS, and the web. To open the web version,
-                press <ThemedText type="smallBold">w</ThemedText> in the terminal running this
-                project.
-              </ThemedText>
-              <Image
-                source={require('@/assets/images/tutorial-web.png')}
-                style={styles.imageTutorial}
-              />
-            </ThemedView>
-          </Collapsible>
-
-          <Collapsible title="Images">
-            <ThemedText type="small">
-              For static images, you can use the <ThemedText type="code">@2x</ThemedText> and{' '}
-              <ThemedText type="code">@3x</ThemedText> suffixes to provide files for different
-              screen densities.
-            </ThemedText>
-            <Image source={require('@/assets/images/react-logo.png')} style={styles.imageReact} />
-            <ExternalLink href="https://reactnative.dev/docs/images">
-              <ThemedText type="linkPrimary">Learn more</ThemedText>
-            </ExternalLink>
-          </Collapsible>
-
-          <Collapsible title="Light and dark mode components">
-            <ThemedText type="small">
-              This template has light and dark mode support. The{' '}
-              <ThemedText type="code">useColorScheme()</ThemedText> hook lets you inspect what the
-              user&apos;s current color scheme is, and so you can adjust UI colors accordingly.
-            </ThemedText>
-            <ExternalLink href="https://docs.expo.dev/develop/user-interface/color-themes/">
-              <ThemedText type="linkPrimary">Learn more</ThemedText>
-            </ExternalLink>
-          </Collapsible>
-
-          <Collapsible title="Animations">
-            <ThemedText type="small">
-              This template includes an example of an animated component. The{' '}
-              <ThemedText type="code">src/components/ui/collapsible.tsx</ThemedText> component uses
-              the powerful <ThemedText type="code">react-native-reanimated</ThemedText> library to
-              animate opening this hint.
-            </ThemedText>
-          </Collapsible>
-        </ThemedView>
-        {Platform.OS === 'web' && <WebBadge />}
-      </ThemedView>
+          ))}
+      </View>
     </ScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  scrollView: {
-    flex: 1,
-  },
-  contentContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-  },
-  container: {
-    maxWidth: MaxContentWidth,
-    flexGrow: 1,
-  },
-  titleContainer: {
-    gap: Spacing.three,
-    alignItems: 'center',
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.six,
-  },
-  centerText: {
-    textAlign: 'center',
-  },
-  pressed: {
-    opacity: 0.7,
-  },
-  linkButton: {
-    flexDirection: 'row',
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.two,
-    borderRadius: Spacing.five,
-    justifyContent: 'center',
-    gap: Spacing.one,
-    alignItems: 'center',
-  },
-  sectionsWrapper: {
-    gap: Spacing.five,
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.three,
-  },
-  collapsibleContent: {
-    alignItems: 'center',
-  },
-  imageTutorial: {
-    width: '100%',
-    aspectRatio: 296 / 171,
-    borderRadius: Spacing.three,
-    marginTop: Spacing.two,
-  },
-  imageReact: {
-    width: 100,
-    height: 100,
-    alignSelf: 'center',
-  },
-});

@@ -118,5 +118,75 @@ router.post("/", async (req, res) => {
     });
   }
 });
+router.get("/", async (_req, res) => {
+  try {
+    const result = await pool.query(
+      `
+      SELECT
+        id,
+        name,
+        age,
+        gender,
+        company_email,
+        phone,
+        company,
+        job_role,
+        city,
+        interests,
+        bio,
+        created_at
+      FROM profiles
+      ORDER BY created_at DESC
+      `
+    );
+
+    return res.status(200).json({
+      success: true,
+      profiles: result.rows,
+    });
+  } catch (error) {
+    console.error("Get profiles error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch profiles",
+    });
+  }
+});
+
+// conditional routing 
+router.get("/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      `
+      SELECT *
+      FROM profiles
+      WHERE id = $1
+      `,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Profile not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      profile: result.rows[0],
+    });
+  } catch (error) {
+    console.error("Get profile error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch profile",
+    });
+  }
+});
 
 export default router;

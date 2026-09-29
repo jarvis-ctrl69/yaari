@@ -3,6 +3,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { pool } from "./db";
 import profileRoutes from "./routes/profileRoutes";
+import tripRoutes from "./routes/tripRoutes";
 
 dotenv.config();
 
@@ -12,6 +13,7 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 app.use("/api/profiles", profileRoutes);
+app.use("/api/trips", tripRoutes);
 
 app.get("/api/health", (_req, res) => {
   res.json({
