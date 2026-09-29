@@ -4,9 +4,12 @@ import {
   View,
   Text,
   TextInput,
+  Pressable,
+  Modal,
 } from "react-native";
 import { router } from "expo-router";
 import Button from "@/components/Button";
+import { supabase } from "@/lib/supabase";
 
 export default function SignupScreen() {
   const [name, setName] = useState("");
@@ -15,10 +18,86 @@ export default function SignupScreen() {
   const [companyEmail, setCompanyEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [aadhaar, setAadhaar] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
-  const handleContinue = () => {
-  router.push("/verify-email");
-};
+  const [genderDropdownOpen, setGenderDropdownOpen] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleContinue = async () => {
+    const trimmedName = name.trim();
+    const trimmedAge = age.trim();
+    const trimmedGender = gender.trim();
+    const trimmedEmail = companyEmail.trim();
+    const trimmedPhone = phone.trim();
+    const trimmedAadhaar = aadhaar.trim();
+    const trimmedPassword = password.trim();
+    const trimmedConfirmPassword = confirmPassword.trim();
+
+    if (!trimmedName) {
+      setError("Please enter your name.");
+      return;
+    }
+
+    const ageNumber = Number(trimmedAge);
+
+    if (
+      !trimmedAge ||
+      Number.isNaN(ageNumber) ||
+      ageNumber < 18
+    ) {
+      setError("You must be at least 18 years old.");
+      return;
+    }
+
+    if (!trimmedGender) {
+      setError("Please select your gender.");
+      return;
+    }
+
+    if (!trimmedEmail.includes("@")) {
+      setError("Please enter a valid company email.");
+      return;
+    }
+
+    if (!/^\d{10}$/.test(trimmedPhone)) {
+      setError("Please enter a valid 10-digit phone number.");
+      return;
+    }
+
+    if (!/^\d{12}$/.test(trimmedAadhaar)) {
+      setError("Please enter a valid 12-digit Aadhaar number.");
+      return;
+    }
+
+    if (trimmedPassword.length < 8) {
+      setError("Password must be at least 8 characters.");
+      return;
+    }
+
+    if (trimmedPassword !== trimmedConfirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+
+    setError("");
+    setLoading(true);
+
+    const { error: signupError } = await supabase.auth.signUp({
+  email: trimmedEmail,
+  password: trimmedPassword,
+});
+
+    setLoading(false);
+
+    if (signupError) {
+      setError(signupError.message);
+      return;
+    }
+
+    router.push("/verify-email");
+  };
 
   return (
     <ScrollView
@@ -43,7 +122,10 @@ export default function SignupScreen() {
         <TextInput
           placeholder="Enter your full name"
           value={name}
-          onChangeText={setName}
+          onChangeText={(text) => {
+            setName(text);
+            setError("");
+          }}
           className="rounded-xl border border-gray-200 bg-white px-4 py-4 text-base text-gray-900"
         />
       </View>
@@ -57,7 +139,10 @@ export default function SignupScreen() {
         <TextInput
           placeholder="Enter your age"
           value={age}
-          onChangeText={setAge}
+          onChangeText={(text) => {
+            setAge(text);
+            setError("");
+          }}
           keyboardType="number-pad"
           className="rounded-xl border border-gray-200 bg-white px-4 py-4 text-base text-gray-900"
         />
@@ -69,12 +154,20 @@ export default function SignupScreen() {
           Gender
         </Text>
 
-        <TextInput
-          placeholder="Male / Female / Other"
-          value={gender}
-          onChangeText={setGender}
-          className="rounded-xl border border-gray-200 bg-white px-4 py-4 text-base text-gray-900"
-        />
+        <Pressable
+          onPress={() => setGenderDropdownOpen(true)}
+          className="rounded-xl border border-gray-200 bg-white px-4 py-4"
+        >
+          <Text
+            className={
+              gender
+                ? "text-base text-gray-900"
+                : "text-base text-gray-400"
+            }
+          >
+            {gender || "Select your gender"}
+          </Text>
+        </Pressable>
       </View>
 
       {/* Company Email */}
@@ -86,7 +179,10 @@ export default function SignupScreen() {
         <TextInput
           placeholder="name@company.com"
           value={companyEmail}
-          onChangeText={setCompanyEmail}
+          onChangeText={(text) => {
+            setCompanyEmail(text);
+            setError("");
+          }}
           keyboardType="email-address"
           autoCapitalize="none"
           autoCorrect={false}
@@ -103,7 +199,10 @@ export default function SignupScreen() {
         <TextInput
           placeholder="Enter your phone number"
           value={phone}
-          onChangeText={setPhone}
+          onChangeText={(text) => {
+            setPhone(text);
+            setError("");
+          }}
           keyboardType="phone-pad"
           className="rounded-xl border border-gray-200 bg-white px-4 py-4 text-base text-gray-900"
         />
@@ -118,7 +217,10 @@ export default function SignupScreen() {
         <TextInput
           placeholder="Enter your Aadhaar number"
           value={aadhaar}
-          onChangeText={setAadhaar}
+          onChangeText={(text) => {
+            setAadhaar(text);
+            setError("");
+          }}
           keyboardType="number-pad"
           secureTextEntry
           maxLength={12}
@@ -126,18 +228,126 @@ export default function SignupScreen() {
         />
 
         <Text className="mt-2 text-sm leading-5 text-gray-500">
-          Your Aadhaar number should be handled securely and should never be
-          displayed or logged by the app.
+          Your Aadhaar number should be handled securely and
+          should never be displayed or logged by the app.
         </Text>
       </View>
+
+      {/* Password */}
+      <View className="mt-5">
+        <Text className="mb-2 text-base font-semibold text-gray-900">
+          Password
+        </Text>
+
+        <TextInput
+          placeholder="Create a password"
+          value={password}
+          onChangeText={(text) => {
+            setPassword(text);
+            setError("");
+          }}
+          secureTextEntry
+          className="rounded-xl border border-gray-200 bg-white px-4 py-4 text-base text-gray-900"
+        />
+      </View>
+
+      {/* Confirm Password */}
+      <View className="mt-5">
+        <Text className="mb-2 text-base font-semibold text-gray-900">
+          Confirm Password
+        </Text>
+
+        <TextInput
+          placeholder="Re-enter your password"
+          value={confirmPassword}
+          onChangeText={(text) => {
+            setConfirmPassword(text);
+            setError("");
+          }}
+          secureTextEntry
+          className="rounded-xl border border-gray-200 bg-white px-4 py-4 text-base text-gray-900"
+        />
+
+        <Text className="mt-2 text-sm leading-5 text-gray-500">
+          Password must contain at least 8 characters.
+        </Text>
+      </View>
+
+      {/* Error */}
+      {error ? (
+        <Text className="mt-4 text-center text-sm font-semibold text-red-600">
+          {error}
+        </Text>
+      ) : null}
 
       {/* Continue */}
       <View className="mt-8">
         <Button
-          title="Continue"
+          title={loading ? "Creating Account..." : "Continue"}
           onPress={handleContinue}
         />
       </View>
+
+      {/* Gender Dropdown */}
+      <Modal
+        visible={genderDropdownOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setGenderDropdownOpen(false)}
+      >
+        <Pressable
+          className="flex-1 items-center justify-center bg-black/40 px-6"
+          onPress={() => setGenderDropdownOpen(false)}
+        >
+          <Pressable
+            className="w-full rounded-2xl bg-white p-5"
+            onPress={() => {}}
+          >
+            <Text className="mb-4 text-xl font-bold text-gray-900">
+              Select Gender
+            </Text>
+
+            <Pressable
+              onPress={() => {
+                setGender("Male");
+                setGenderDropdownOpen(false);
+                setError("");
+              }}
+              className="border-b border-gray-100 py-4"
+            >
+              <Text className="text-base text-gray-900">
+                Male
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => {
+                setGender("Female");
+                setGenderDropdownOpen(false);
+                setError("");
+              }}
+              className="border-b border-gray-100 py-4"
+            >
+              <Text className="text-base text-gray-900">
+                Female
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => {
+                setGender("Other");
+                setGenderDropdownOpen(false);
+                setError("");
+              }}
+              className="py-4"
+            >
+              <Text className="text-base text-gray-900">
+                Other
+              </Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </ScrollView>
   );
 }

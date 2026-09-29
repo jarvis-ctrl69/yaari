@@ -2,13 +2,16 @@ import { useState } from "react";
 import { View, Text, TextInput } from "react-native";
 import { router } from "expo-router";
 import Button from "@/components/Button";
+import { supabase } from "@/lib/supabase";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
 
-  const handleLogin = () => {
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleLogin = async () => {
     const trimmedEmail = email.trim();
 
     if (!trimmedEmail) {
@@ -32,9 +35,21 @@ export default function LoginScreen() {
     }
 
     setError("");
+    setLoading(true);
 
-    // Temporary navigation.
-    // Real authentication will be connected to the backend later.
+    const { error: loginError } =
+      await supabase.auth.signInWithPassword({
+        email: trimmedEmail,
+        password,
+      });
+
+    setLoading(false);
+
+    if (loginError) {
+      setError(loginError.message);
+      return;
+    }
+
     router.replace("/");
   };
 
@@ -96,7 +111,7 @@ export default function LoginScreen() {
       {/* Login */}
       <View className="mt-8">
         <Button
-          title="Login"
+          title={loading ? "Logging in..." : "Login"}
           onPress={handleLogin}
         />
       </View>
@@ -109,7 +124,7 @@ export default function LoginScreen() {
         Forgot Password?
       </Text>
 
-      {/* Create Account */}
+      {/* Signup */}
       <View className="mt-8">
         <Text
           className="text-center text-base text-gray-600"
