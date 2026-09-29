@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import { pool } from "./db";
 
 dotenv.config();
 
@@ -16,6 +17,15 @@ app.get("/api/health", (_req, res) => {
     message: "Yaari backend is running",
   });
 });
+// db postggrace
+
+pool.query("SELECT NOW()")
+  .then(() => {
+    console.log("PostgreSQL connected successfully");
+  })
+  .catch((error) => {
+    console.error("PostgreSQL connection failed:", error);
+  });
 
 app.listen(PORT, () => {
   console.log(`Yaari backend running on port ${PORT}`);
