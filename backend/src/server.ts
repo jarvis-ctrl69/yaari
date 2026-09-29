@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import { pool } from "./db";
 import profileRoutes from "./routes/profileRoutes";
 import tripRoutes from "./routes/tripRoutes";
+import tripRequestRoutes from "./routes/tripRequestRoutes";
 
 dotenv.config();
 
@@ -14,11 +15,13 @@ app.use(cors());
 app.use(express.json());
 app.use("/api/profiles", profileRoutes);
 app.use("/api/trips", tripRoutes);
+app.use("/api/trip-requests", tripRequestRoutes);
 
 app.get("/api/health", (_req, res) => {
   res.json({
     success: true,
     message: "Yaari backend is running",
+    
   });
 });
 // db postggrace

@@ -101,3 +101,61 @@ export async function getProfile(id: string) {
 
   return result.profile;
 }
+
+//explore trips
+
+export async function getTrips() {
+  const response = await fetch(`${API_URL}/api/trips`);
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(result.message || "Failed to fetch trips");
+  }
+
+  return result.trips;
+}
+
+//with id 
+export async function getTrip(id: string) {
+  const response = await fetch(`${API_URL}/api/trips/${id}`);
+
+  if (response.status === 404) {
+    return null;
+  }
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(result.message || "Failed to fetch trip");
+  }
+
+  return result.trip;
+}
+
+// request trip
+export async function requestToJoinTrip(
+  trip_id: string,
+  requester_id: string
+) {
+  const response = await fetch(`${API_URL}/api/trip-requests`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      trip_id,
+      requester_id,
+    }),
+  });
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      result.message || "Failed to send join request"
+    );
+  }
+
+  return result.request;
+}

@@ -1,175 +1,220 @@
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
-  Pressable,
+  RefreshControl,
   ScrollView,
   Text,
   View,
 } from "react-native";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 
 import Card from "@/components/Card";
-import { getProfiles } from "@/lib/api";
+import Button from "@/components/Button";
+import { getTrips } from "@/lib/api";
 
-type Profile = {
+type Trip = {
   id: string;
-  name: string;
-  age: number;
-  gender: string;
-  company_email: string;
-  phone: string;
+  creator_id: string;
+  from_location: string;
+  to_location: string;
+  trip_date: string;
+  departure_time: string;
+  available_seats: number;
+  trip_cost: string | number;
+  travel_type: string;
+  description?: string;
+  creator_name: string;
   company?: string;
   job_role?: string;
   city?: string;
-  interests?: string;
-  bio?: string;
 };
 
 export default function ExploreScreen() {
-  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [trips, setTrips] = useState<Trip[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    loadProfiles();
-  }, []);
-
-  const loadProfiles = async () => {
+  const loadTrips = async () => {
     try {
-      setLoading(true);
       setError("");
 
-      const data = await getProfiles();
+      const data = await getTrips();
 
-      setProfiles(data);
+      setTrips(data);
     } catch (error) {
-      console.error("Failed to load profiles:", error);
-      setError("Unable to load profiles.");
+      console.error("Failed to load trips:", error);
+      setError("Unable to load trips. Please try again.");
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
+  useFocusEffect(
+    useCallback(() => {
+      loadTrips();
+    }, [])
+  );
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    loadTrips();
+  };
+
+  if (loading) {
+    return (
+      <View className="flex-1 items-center justify-center bg-gray-50">
+        <ActivityIndicator size="large" color="#2563EB" />
+
+        <Text className="mt-4 text-base text-gray-500">
+          Finding trips...
+        </Text>
+      </View>
+    );
+  }
+
   return (
-    <ScrollView className="flex-1 bg-gray-50">
-      <View className="px-5 pb-10 pt-16">
+    <ScrollView
+      className="flex-1 bg-gray-50"
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
+        />
+      }
+    >
+      <View className="px-5 pb-10 pt-8">
+
         {/* Header */}
         <Text className="text-3xl font-bold text-gray-900">
-          Explore
+          Explore Trips
         </Text>
 
-        <Text className="mt-2 text-base text-gray-500">
-          Discover people on Yaari
+        <Text className="mt-2 text-base leading-6 text-gray-500">
+          Discover journeys and find people travelling your way.
         </Text>
-
-        {/* Loading */}
-        {loading && (
-          <View className="mt-10 items-center">
-            <ActivityIndicator size="large" />
-
-            <Text className="mt-3 text-gray-500">
-              Loading profiles...
-            </Text>
-          </View>
-        )}
 
         {/* Error */}
-        {!loading && error !== "" && (
-          <View className="mt-8 rounded-2xl bg-red-50 p-5">
-            <Text className="text-center text-red-600">
+        {error ? (
+          <Card>
+            <Text className="text-base font-semibold text-red-600">
               {error}
             </Text>
-          </View>
-        )}
 
-        {/* No profiles */}
-        {!loading &&
-          error === "" &&
-          profiles.length === 0 && (
-            <View className="mt-10 items-center">
-              <Text className="text-base text-gray-500">
-                No profiles found.
-              </Text>
+            <View className="mt-4">
+              <Button
+                title="Try Again"
+                onPress={loadTrips}
+              />
             </View>
-          )}
+          </Card>
+        ) : null}
 
-        {/* Profiles */}
-        {!loading &&
-          error === "" &&
-          profiles.map((profile) => (
-            <Pressable
-              key={profile.id}
-              onPress={() =>
-                router.push({
-                  pathname: "/profile-details",
-                  params: {
-                    id: profile.id,
-                    name: profile.name,
-                    age: String(profile.age),
-                    gender: profile.gender,
-                    company: profile.company ?? "",
-                    job_role: profile.job_role ?? "",
-                    city: profile.city ?? "",
-                    interests: profile.interests ?? "",
-                    bio: profile.bio ?? "",
-                  },
-                })
-              }
-              className="mt-5"
-            >
-              <Card>
-                {/* Name */}
-                <Text className="text-xl font-bold text-gray-900">
-                  {profile.name}
+        {/* Empty state */}
+        {!error && trips.length === 0 ? (
+          <Card>
+            <Text className="text-xl font-bold text-gray-900">
+              No trips yet
+            </Text>
+
+            <Text className="mt-2 text-base leading-6 text-gray-500">
+              There are no active trips available right now.
+              Create one and start your journey.
+            </Text>
+
+            <View className="mt-5">
+              <Button
+                title="Create a Trip"
+                onPress={() => router.push("/create-trip")}
+              />
+            </View>
+          </Card>
+        ) : null}
+
+        {/* Trip list */}
+        <View className="mt-6">
+          {trips.map((trip) => (
+            <Card key={trip.id}>
+
+              {/* Route */}
+              <Text className="text-xl font-bold text-gray-900">
+                {trip.from_location} → {trip.to_location}
+              </Text>
+
+              {/* Date + time */}
+              <Text className="mt-3 text-base text-gray-600">
+                📅 {trip.trip_date}  •  🕐 {trip.departure_time}
+              </Text>
+
+              {/* Trip information */}
+              <View className="mt-4 flex-row flex-wrap gap-2">
+
+                <View className="rounded-full bg-blue-50 px-3 py-2">
+                  <Text className="text-sm font-semibold text-blue-700">
+                    🚗 {trip.travel_type}
+                  </Text>
+                </View>
+
+                <View className="rounded-full bg-green-50 px-3 py-2">
+                  <Text className="text-sm font-semibold text-green-700">
+                    {trip.available_seats} seats
+                  </Text>
+                </View>
+
+                <View className="rounded-full bg-yellow-50 px-3 py-2">
+                  <Text className="text-sm font-semibold text-yellow-700">
+                    ₹{trip.trip_cost}
+                  </Text>
+                </View>
+
+              </View>
+
+              {/* Creator */}
+              <View className="mt-5">
+                <Text className="text-sm font-semibold text-gray-500">
+                  TRAVELLING WITH
                 </Text>
 
-                {/* Age + Gender */}
-                <Text className="mt-1 text-base text-gray-600">
-                  {profile.age} • {profile.gender}
+                <Text className="mt-1 text-base font-semibold text-gray-900">
+                  {trip.creator_name}
                 </Text>
 
-                {/* Job */}
-                {profile.job_role && (
-                  <Text className="mt-3 text-base font-medium text-gray-800">
-                    {profile.job_role}
+                {trip.job_role || trip.company ? (
+                  <Text className="mt-1 text-sm text-gray-500">
+                    {trip.job_role}
+                    {trip.job_role && trip.company ? " • " : ""}
+                    {trip.company}
                   </Text>
-                )}
+                ) : null}
+              </View>
 
-                {/* Company */}
-                {profile.company && (
-                  <Text className="mt-1 text-sm text-gray-600">
-                    {profile.company}
-                  </Text>
-                )}
-
-                {/* City */}
-                {profile.city && (
-                  <Text className="mt-3 text-sm text-gray-500">
-                    📍 {profile.city}
-                  </Text>
-                )}
-
-                {/* Interests */}
-                {profile.interests && (
-                  <Text className="mt-3 text-sm text-gray-600">
-                    Interests: {profile.interests}
-                  </Text>
-                )}
-
-                {/* Bio */}
-                {profile.bio && (
-                  <Text className="mt-3 text-sm leading-5 text-gray-600">
-                    {profile.bio}
-                  </Text>
-                )}
-
-                {/* View Profile */}
-                <Text className="mt-4 text-sm font-semibold text-blue-600">
-                  View Profile →
+              {/* Description */}
+              {trip.description ? (
+                <Text className="mt-4 text-base leading-6 text-gray-600">
+                  {trip.description}
                 </Text>
-              </Card>
-            </Pressable>
+              ) : null}
+
+              {/* View button */}
+              <View className="mt-5">
+                <Button
+                  title="View Trip"
+                  onPress={() =>
+                    router.push({
+                      pathname: "/trip-details",
+                      params: {
+                        id: trip.id,
+                      },
+                    })
+                  }
+                />
+              </View>
+
+            </Card>
           ))}
+        </View>
+
       </View>
     </ScrollView>
   );

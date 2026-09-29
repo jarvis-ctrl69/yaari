@@ -3,6 +3,7 @@ import { pool } from "../db";
 
 const router = Router();
 
+// CREATE TRIP
 router.post("/", async (req, res) => {
   try {
     const {
@@ -77,4 +78,80 @@ router.post("/", async (req, res) => {
   }
 });
 
+// GET ALL ACTIVE TRIPS
+router.get("/", async (_req, res) => {
+  try {
+    const result = await pool.query(
+      `
+      SELECT
+        trips.*,
+        profiles.name AS creator_name,
+        profiles.company,
+        profiles.job_role,
+        profiles.city
+      FROM trips
+      JOIN profiles
+        ON trips.creator_id = profiles.id
+      WHERE trips.status = 'active'
+      ORDER BY trips.trip_date ASC, trips.departure_time ASC
+      `
+    );
+
+    return res.status(200).json({
+      success: true,
+      trips: result.rows,
+    });
+  } catch (error) {
+    console.error("Get trips error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch trips",
+    });
+  }
+});
+
+// id trip 
+
+// GET SINGLE TRIP
+router.get("/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      `
+      SELECT
+        trips.*,
+        profiles.name AS creator_name,
+        profiles.company,
+        profiles.job_role,
+        profiles.city
+      FROM trips
+      JOIN profiles
+        ON trips.creator_id = profiles.id
+      WHERE trips.id = $1
+      `,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Trip not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      trip: result.rows[0],
+    });
+  } catch (error) {
+    console.error("Get trip error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch trip",
+    });
+  }
+});
 export default router;
