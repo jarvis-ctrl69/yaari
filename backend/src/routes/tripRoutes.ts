@@ -118,21 +118,32 @@ router.get("/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
-    const result = await pool.query(
-      `
-      SELECT
-        trips.*,
-        profiles.name AS creator_name,
-        profiles.company,
-        profiles.job_role,
-        profiles.city
-      FROM trips
-      JOIN profiles
-        ON trips.creator_id = profiles.id
-      WHERE trips.id = $1
-      `,
-      [id]
-    );
+   const result = await pool.query(
+  `
+  SELECT
+    trips.*,
+    profiles.name AS creator_name,
+    profiles.company,
+    profiles.job_role,
+    profiles.city,
+
+    (
+      trips.available_seats -
+      (
+        SELECT COUNT(*)
+        FROM trip_requests
+        WHERE trip_requests.trip_id = trips.id
+          AND trip_requests.status = 'accepted'
+      )
+    ) AS seats_left
+
+  FROM trips
+  JOIN profiles
+    ON trips.creator_id = profiles.id
+  WHERE trips.id = $1
+  `,
+  [id]
+);
 
     if (result.rows.length === 0) {
       return res.status(404).json({

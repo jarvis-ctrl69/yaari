@@ -21,6 +21,7 @@ type Trip = {
   trip_date: string;
   departure_time: string;
   available_seats: number;
+  seats_left: number;
   trip_cost: string | number;
   travel_type: string;
   description?: string;
@@ -163,10 +164,16 @@ export default function TripDetailsScreen() {
                 {trip.available_seats} seats
               </Text>
             </View>
+            <View className="rounded-full bg-red-50 px-4 py-2">
+          <Text className="text-base text-gray-600">
+               {trip.travel_type} · {trip.available_seats} seats ·{" "}
+                 {trip.seats_left} seats left · ₹{trip.trip_cost}
+                </Text>
+            </View>
 
             <View className="rounded-full bg-yellow-50 px-4 py-2">
               <Text className="font-semibold text-yellow-700">
-                ₹{trip.trip_cost}
+                ₹{trip.trip_cost} PER PERSON
               </Text>
             </View>
 
