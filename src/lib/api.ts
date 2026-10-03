@@ -209,3 +209,36 @@ export async function updateTripRequest(
 
   return result.request;
 }
+
+// get my trips
+export async function getMyTrips(userId: string) {
+  const response = await fetch(
+    `${API_URL}/api/trips/my/${userId}`
+  );
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      result.message || "Failed to fetch my trips"
+    );
+  }
+
+  return result;
+}
+// groups
+export async function getTripGroup(tripId: string) {
+  const response = await fetch(
+    `${API_URL}/api/groups/trip/${tripId}`
+  );
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      result.message || "Failed to fetch trip group"
+    );
+  }
+
+  return result;
+}

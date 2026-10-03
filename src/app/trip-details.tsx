@@ -7,6 +7,7 @@ import {
   View,
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
+
 import Card from "@/components/Card";
 import Button from "@/components/Button";
 import { getTrip, requestToJoinTrip } from "@/lib/api";
@@ -94,7 +95,8 @@ export default function TripDetailsScreen() {
 
       Alert.alert(
         "Unable to send request",
-        error?.message || "Something went wrong while sending your request."
+        error?.message ||
+          "Something went wrong while sending your request."
       );
     } finally {
       setRequesting(false);
@@ -128,7 +130,10 @@ export default function TripDetailsScreen() {
   }
 
   return (
-    <ScrollView className="flex-1 bg-gray-50">
+    <ScrollView
+      className="flex-1 bg-gray-50"
+      showsVerticalScrollIndicator={false}
+    >
       <View className="px-5 pb-10 pt-8">
 
         {/* Route */}
@@ -146,6 +151,7 @@ export default function TripDetailsScreen() {
           </Text>
 
           <View className="mt-5 flex-row flex-wrap gap-2">
+
             <View className="rounded-full bg-blue-50 px-4 py-2">
               <Text className="font-semibold text-blue-700">
                 🚗 {trip.travel_type}
@@ -163,6 +169,7 @@ export default function TripDetailsScreen() {
                 ₹{trip.trip_cost}
               </Text>
             </View>
+
           </View>
         </Card>
 
@@ -215,23 +222,44 @@ export default function TripDetailsScreen() {
         {/* Request to Join */}
         <View className="mt-6">
           <Button
-            title={requesting ? "Sending Request..." : "Request to Join"}
+            title={
+              requesting
+                ? "Sending Request..."
+                : "Request to Join"
+            }
             onPress={handleRequestToJoin}
           />
         </View>
+
+        {/* Join Requests */}
         <View className="mt-4">
-  <Button
-    title="View Join Requests"
-    onPress={() =>
-      router.push({
-        pathname: "/trip-requests",
-        params: {
-          tripId: trip.id,
-        },
-      })
-    }
-  />
-</View>
+          <Button
+            title="View Join Requests"
+            onPress={() =>
+              router.push({
+                pathname: "/trip-requests",
+                params: {
+                  tripId: trip.id,
+                },
+              })
+            }
+          />
+        </View>
+
+        {/* Trip Group */}
+        <View className="mt-4">
+          <Button
+            title="View Trip Group"
+            onPress={() =>
+              router.push({
+                pathname: "/groups",
+                params: {
+                  tripId: trip.id,
+                },
+              })
+            }
+          />
+        </View>
 
       </View>
     </ScrollView>

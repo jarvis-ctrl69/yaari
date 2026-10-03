@@ -5,6 +5,7 @@ import { pool } from "./db";
 import profileRoutes from "./routes/profileRoutes";
 import tripRoutes from "./routes/tripRoutes";
 import tripRequestRoutes from "./routes/tripRequestRoutes";
+import groupRoutes from "./routes/groupRoutes";
 
 dotenv.config();
 
@@ -16,6 +17,8 @@ app.use(express.json());
 app.use("/api/profiles", profileRoutes);
 app.use("/api/trips", tripRoutes);
 app.use("/api/trip-requests", tripRequestRoutes);
+app.use("/api/groups", groupRoutes);
+
 
 app.get("/api/health", (_req, res) => {
   res.json({

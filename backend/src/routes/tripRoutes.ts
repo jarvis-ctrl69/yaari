@@ -154,4 +154,64 @@ router.get("/:id", async (req, res) => {
     });
   }
 });
+
+// GET MY TRIPS
+router.get("/my/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    // Trips created by the user
+    const createdTripsResult = await pool.query(
+      `
+      SELECT
+        trips.*,
+        profiles.name AS creator_name,
+        profiles.company,
+        profiles.job_role,
+        profiles.city
+      FROM trips
+      JOIN profiles
+        ON trips.creator_id = profiles.id
+      WHERE trips.creator_id = $1
+      ORDER BY trips.trip_date ASC, trips.departure_time ASC
+      `,
+      [userId]
+    );
+
+    // Trips joined by the user
+    // Only accepted requests count as joined trips
+    const joinedTripsResult = await pool.query(
+      `
+      SELECT
+        trips.*,
+        profiles.name AS creator_name,
+        profiles.company,
+        profiles.job_role,
+        profiles.city
+      FROM trip_requests
+      JOIN trips
+        ON trip_requests.trip_id = trips.id
+      JOIN profiles
+        ON trips.creator_id = profiles.id
+      WHERE trip_requests.requester_id = $1
+        AND trip_requests.status = 'accepted'
+      ORDER BY trips.trip_date ASC, trips.departure_time ASC
+      `,
+      [userId]
+    );
+
+    return res.status(200).json({
+      success: true,
+      createdTrips: createdTripsResult.rows,
+      joinedTrips: joinedTripsResult.rows,
+    });
+  } catch (error) {
+    console.error("Get my trips error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch my trips",
+    });
+  }
+});
 export default router;

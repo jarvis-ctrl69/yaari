@@ -20,6 +20,7 @@ export default function ProfileSetupScreen() {
   const [city, setCity] = useState("");
   const [interests, setInterests] = useState("");
   const [bio, setBio] = useState("");
+  const [preferredTravelType, setPreferredTravelType] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -37,52 +38,94 @@ export default function ProfileSetupScreen() {
   };
 
   const handleContinue = async () => {
-  setError("");
-  setLoading(true);
+    setError("");
+    setLoading(true);
 
-  try {
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
+    try {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
 
-    if (userError || !user) {
-      setError("You must be logged in to create your profile.");
+      if (userError || !user) {
+        setError("You must be logged in to create your profile.");
+        setLoading(false);
+        return;
+      }
+
+      const name = user.user_metadata?.name ?? "";
+      const age = Number(user.user_metadata?.age ?? 0);
+      const gender = user.user_metadata?.gender ?? "";
+      const companyEmail = user.email ?? "";
+      const phone = user.user_metadata?.phone ?? "";
+
+      // Validate required information
+      if (!name.trim()) {
+        setError("Name is missing. Please go back and complete signup.");
+        setLoading(false);
+        return;
+      }
+
+      if (!age || age <= 0) {
+        setError("Age is missing. Please go back and complete signup.");
+        setLoading(false);
+        return;
+      }
+
+      if (!gender.trim()) {
+        setError("Gender is missing. Please go back and complete signup.");
+        setLoading(false);
+        return;
+      }
+
+      if (!companyEmail.trim()) {
+        setError("Company email is missing. Please go back and complete signup.");
+        setLoading(false);
+        return;
+      }
+
+      if (!phone.trim()) {
+        setError("Phone number is missing. Please go back and complete signup.");
+        setLoading(false);
+        return;
+      }
+
+      const profile = await createProfile({
+        id: user.id,
+
+        // Information collected during signup
+        name,
+        age,
+        gender,
+        company_email: companyEmail,
+        phone,
+
+        // Information collected during profile setup
+        company,
+        job_role: jobRole,
+        city,
+        interests,
+        bio,
+        // preferred_travel_type: preferredTravelType,
+        // profile_image_url: profileImage,
+      });
+
+      console.log("Profile created successfully:", profile);
+
       setLoading(false);
-      return;
+
+      router.replace("/(tabs)");
+    } catch (error) {
+      console.error("Profile creation failed:", error);
+
+      setLoading(false);
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Unable to save your profile. Please try again."
+      );
     }
-
-    const profile = await createProfile({
-      id: user.id,
-
-      // Information collected during signup
-      name: user.user_metadata?.name ?? "",
-      age: Number(user.user_metadata?.age ?? 0),
-      gender: user.user_metadata?.gender ?? "",
-      company_email: user.email ?? "",
-      phone: user.user_metadata?.phone ?? "",
-
-      // Information collected during profile setup
-      company,
-      job_role: jobRole,
-      city,
-      interests,
-      bio,
-    });
-
-    console.log("Profile created successfully:", profile);
-
-    setLoading(false);
-    
-    router.replace("/(tabs)");
-
-  } catch (error) {
-    console.error("Profile creation failed:", error);
-
-    setLoading(false);
-    setError("Unable to save your profile. Please try again.");
-  }
-};
+  };
 
   return (
     <ScrollView
@@ -166,6 +209,23 @@ export default function ProfileSetupScreen() {
           value={city}
           onChangeText={(text) => {
             setCity(text);
+            setError("");
+          }}
+          className="rounded-xl border border-gray-200 bg-white px-4 py-4 text-base text-gray-900"
+        />
+      </View>
+
+      {/* Preferred Travel Type */}
+      <View className="mt-5">
+        <Text className="mb-2 text-base font-semibold text-gray-900">
+          Preferred Travel Type
+        </Text>
+
+        <TextInput
+          placeholder="e.g. Carpool, Bus, Train"
+          value={preferredTravelType}
+          onChangeText={(text) => {
+            setPreferredTravelType(text);
             setError("");
           }}
           className="rounded-xl border border-gray-200 bg-white px-4 py-4 text-base text-gray-900"

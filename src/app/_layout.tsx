@@ -57,6 +57,11 @@ export default function RootLayout() {
           name="edit-profile"
           options={{ title: "Edit Profile" }}
         />
+
+        <Stack.Screen
+  name="group"
+  options={{ title: "Trip Group" }}
+/>
       </Stack>
     </ThemeProvider>
   );

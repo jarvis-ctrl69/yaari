@@ -112,7 +112,7 @@ router.get("/:tripId", async (req, res) => {
     });
   }
 });
-// ACCEPT OR REJECT A TRIP REQUEST
+/// ACCEPT OR REJECT A TRIP REQUEST
 router.patch("/:requestId", async (req, res) => {
   try {
     const { requestId } = req.params;
@@ -165,6 +165,7 @@ router.patch("/:requestId", async (req, res) => {
       });
     }
 
+    // Update request status
     const result = await pool.query(
       `
       UPDATE trip_requests
@@ -174,6 +175,54 @@ router.patch("/:requestId", async (req, res) => {
       `,
       [status, requestId]
     );
+
+    // If request was accepted, create the group if needed
+    // and add the requester as a member.
+    if (status === "accepted") {
+      // Create group for this trip if it doesn't exist
+      const groupResult = await pool.query(
+        `
+        INSERT INTO trip_groups (trip_id)
+        VALUES ($1)
+        ON CONFLICT (trip_id)
+        DO UPDATE SET trip_id = EXCLUDED.trip_id
+        RETURNING *
+        `,
+        [request.trip_id]
+      );
+
+      const group = groupResult.rows[0];
+
+      // Add trip creator as admin
+      await pool.query(
+        `
+        INSERT INTO trip_group_members (
+          group_id,
+          user_id,
+          role
+        )
+        VALUES ($1, $2, 'admin')
+        ON CONFLICT (group_id, user_id)
+        DO NOTHING
+        `,
+        [group.id, request.creator_id]
+      );
+
+      // Add accepted requester as member
+      await pool.query(
+        `
+        INSERT INTO trip_group_members (
+          group_id,
+          user_id,
+          role
+        )
+        VALUES ($1, $2, 'member')
+        ON CONFLICT (group_id, user_id)
+        DO NOTHING
+        `,
+        [group.id, request.requester_id]
+      );
+    }
 
     return res.status(200).json({
       success: true,
