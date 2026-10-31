@@ -1,3 +1,4 @@
+
 import { Router } from "express";
 import { pool } from "../db";
 
@@ -63,7 +64,6 @@ router.post("/", async (req, res) => {
   } catch (error: any) {
     console.error("Create trip request error:", error);
 
-    // Duplicate request
     if (error.code === "23505") {
       return res.status(409).json({
         success: false,
@@ -77,6 +77,7 @@ router.post("/", async (req, res) => {
     });
   }
 });
+
 // GET REQUESTS FOR A TRIP
 router.get("/:tripId", async (req, res) => {
   try {
@@ -112,8 +113,12 @@ router.get("/:tripId", async (req, res) => {
     });
   }
 });
-/// ACCEPT OR REJECT A TRIP REQUEST
+
+// ACCEPT OR REJECT A TRIP REQUEST
 router.patch("/:requestId", async (req, res) => {
+  const client = await pool.connect();
+  let transactionStarted = false;
+
   try {
     const { requestId } = req.params;
     const { status, user_id } = req.body;
@@ -132,8 +137,12 @@ router.patch("/:requestId", async (req, res) => {
       });
     }
 
-    // Find the request and its trip creator
-    const requestResult = await pool.query(
+    // Start transaction
+    await client.query("BEGIN");
+    transactionStarted = true;
+
+    // Find request and lock it while processing
+    const requestResult = await client.query(
       `
       SELECT
         trip_requests.id,
@@ -144,11 +153,15 @@ router.patch("/:requestId", async (req, res) => {
       JOIN trips
         ON trip_requests.trip_id = trips.id
       WHERE trip_requests.id = $1
+      FOR UPDATE OF trip_requests
       `,
       [requestId]
     );
 
     if (requestResult.rows.length === 0) {
+      await client.query("ROLLBACK");
+      transactionStarted = false;
+
       return res.status(404).json({
         success: false,
         message: "Trip request not found",
@@ -159,6 +172,9 @@ router.patch("/:requestId", async (req, res) => {
 
     // Only the trip creator can accept/reject
     if (request.creator_id !== user_id) {
+      await client.query("ROLLBACK");
+      transactionStarted = false;
+
       return res.status(403).json({
         success: false,
         message: "Only the trip creator can manage this request",
@@ -166,7 +182,7 @@ router.patch("/:requestId", async (req, res) => {
     }
 
     // Update request status
-    const result = await pool.query(
+    const result = await client.query(
       `
       UPDATE trip_requests
       SET status = $1
@@ -176,11 +192,10 @@ router.patch("/:requestId", async (req, res) => {
       [status, requestId]
     );
 
-    // If request was accepted, create the group if needed
-    // and add the requester as a member.
+    // If accepted, create group and add both members
     if (status === "accepted") {
-      // Create group for this trip if it doesn't exist
-      const groupResult = await pool.query(
+      // Create group if it does not already exist
+      const groupResult = await client.query(
         `
         INSERT INTO trip_groups (trip_id)
         VALUES ($1)
@@ -194,7 +209,7 @@ router.patch("/:requestId", async (req, res) => {
       const group = groupResult.rows[0];
 
       // Add trip creator as admin
-      await pool.query(
+      await client.query(
         `
         INSERT INTO trip_group_members (
           group_id,
@@ -209,7 +224,7 @@ router.patch("/:requestId", async (req, res) => {
       );
 
       // Add accepted requester as member
-      await pool.query(
+      await client.query(
         `
         INSERT INTO trip_group_members (
           group_id,
@@ -224,6 +239,10 @@ router.patch("/:requestId", async (req, res) => {
       );
     }
 
+    // Commit all changes together
+    await client.query("COMMIT");
+    transactionStarted = false;
+
     return res.status(200).json({
       success: true,
       message: `Request ${status} successfully`,
@@ -232,10 +251,21 @@ router.patch("/:requestId", async (req, res) => {
   } catch (error) {
     console.error("Update trip request error:", error);
 
+    if (transactionStarted) {
+      try {
+        await client.query("ROLLBACK");
+      } catch (rollbackError) {
+        console.error("Transaction rollback error:", rollbackError);
+      }
+    }
+
     return res.status(500).json({
       success: false,
       message: "Failed to update trip request",
     });
+  } finally {
+    client.release();
   }
 });
+
 export default router;

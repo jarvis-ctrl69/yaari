@@ -235,6 +235,16 @@ export async function getTripGroup(tripId: string) {
 
   const result = await response.json();
 
+  // A group is created only after the first join request is accepted.
+  // So 404 here means the group does not exist yet.
+  if (response.status === 404) {
+    return {
+      success: true,
+      group: null,
+      members: [],
+    };
+  }
+
   if (!response.ok) {
     throw new Error(
       result.message || "Failed to fetch trip group"
