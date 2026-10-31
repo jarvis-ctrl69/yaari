@@ -11,11 +11,7 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import MapView, {
-  Marker,
-  Polyline,
-  Region,
-} from "react-native-maps";
+import { WebView } from "react-native-webview";
 import * as Location from "expo-location";
 
 import { supabase } from "@/lib/supabase";
@@ -35,15 +31,142 @@ type SearchResult = {
 
 type LocationField = "from" | "to";
 
-const INITIAL_REGION: Region = {
-  latitude: 12.9716,
-  longitude: 77.5946,
-  latitudeDelta: 0.08,
-  longitudeDelta: 0.08,
-};
+
+
+const MAP_HTML = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    html, body, #map {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      background: #e5e7eb;
+    }
+    .leaflet-container {
+      font-family: Arial, sans-serif;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const map = L.map('map').setView([12.9716, 77.5946], 12);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    let pickupMarker = null;
+    let destinationMarker = null;
+    let routeLine = null;
+
+    function sendToApp(data) {
+      window.ReactNativeWebView.postMessage(JSON.stringify(data));
+    }
+
+    map.on('click', function(event) {
+      sendToApp({
+        type: 'map-tap',
+        latitude: event.latlng.lat,
+        longitude: event.latlng.lng
+      });
+    });
+
+    function updateMarker(field, coordinates, title) {
+      let marker = field === 'from' ? pickupMarker : destinationMarker;
+
+      if (marker) {
+        marker.setLatLng(coordinates);
+      } else {
+        marker = L.marker(coordinates, {
+          draggable: true,
+          title: title
+        }).addTo(map);
+
+        if (field === 'from') {
+          pickupMarker = marker;
+        } else {
+          destinationMarker = marker;
+        }
+
+        marker.on('dragend', function(event) {
+          const position = event.target.getLatLng();
+          sendToApp({
+            type: 'marker-drag',
+            field: field,
+            latitude: position.lat,
+            longitude: position.lng
+          });
+        });
+      }
+
+      marker.bindPopup(title);
+    }
+
+    window.updateYaariMap = function(data) {
+      if (data.from) {
+        updateMarker('from',
+          [data.from.latitude, data.from.longitude],
+          'Pickup location'
+        );
+      } else if (pickupMarker) {
+        map.removeLayer(pickupMarker);
+        pickupMarker = null;
+      }
+
+      if (data.to) {
+        updateMarker('to',
+          [data.to.latitude, data.to.longitude],
+          'Destination'
+        );
+      } else if (destinationMarker) {
+        map.removeLayer(destinationMarker);
+        destinationMarker = null;
+      }
+
+      if (routeLine) {
+        map.removeLayer(routeLine);
+        routeLine = null;
+      }
+
+      if (data.route && data.route.length > 0) {
+        routeLine = L.polyline(data.route, {
+          color: '#2563EB',
+          weight: 5
+        }).addTo(map);
+      }
+
+      if (data.fitRoute && data.from && data.to) {
+        const bounds = L.latLngBounds([
+          [data.from.latitude, data.from.longitude],
+          [data.to.latitude, data.to.longitude]
+        ]);
+        map.fitBounds(bounds, { padding: [35, 35] });
+      }
+    };
+
+    window.moveYaariMap = function(latitude, longitude) {
+      map.setView([latitude, longitude], 15);
+    };
+
+    window.ReactNativeWebView.postMessage(
+      JSON.stringify({ type: 'map-ready' })
+    );
+  </script>
+</body>
+</html>
+`;
 
 export default function CreateTripScreen() {
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef<WebView>(null);
+  const [mapLoaded, setMapLoaded] = useState(false);
   const searchRequestId = useRef(0);
   const routeRequestId = useRef(0);
 
@@ -119,6 +242,41 @@ export default function CreateTripScreen() {
   const [description, setDescription] = useState("");
 
   const [loading, setLoading] = useState(false);
+
+  // ---------------------------------------
+  // LEAFLET MAP BRIDGE
+  // ---------------------------------------
+
+  const moveMapTo = (coordinates: Coordinates) => {
+    mapRef.current?.injectJavaScript(`
+      window.moveYaariMap(
+        ${coordinates.latitude},
+        ${coordinates.longitude}
+      );
+      true;
+    `);
+  };
+
+  useEffect(() => {
+    if (!mapLoaded) return;
+
+    const mapData = {
+      from: fromCoords,
+      to: toCoords,
+      route: routeCoordinates.map((point) => [
+        point.latitude,
+        point.longitude,
+      ]),
+      fitRoute: Boolean(
+        fromCoords && toCoords && routeCoordinates.length > 0
+      ),
+    };
+
+    mapRef.current?.injectJavaScript(`
+      window.updateYaariMap(${JSON.stringify(mapData)});
+      true;
+    `);
+  }, [mapLoaded, fromCoords, toCoords, routeCoordinates]);
 
   // Current search text
   const searchText =
@@ -257,15 +415,7 @@ export default function CreateTripScreen() {
     setActiveField(null);
     Keyboard.dismiss();
 
-    mapRef.current?.animateToRegion(
-      {
-        latitude: coordinates.latitude,
-        longitude: coordinates.longitude,
-        latitudeDelta: 0.025,
-        longitudeDelta: 0.025,
-      },
-      700
-    );
+    moveMapTo(coordinates);
   };
 
   // ---------------------------------------
@@ -305,14 +455,7 @@ export default function CreateTripScreen() {
       setActiveField(null);
       setSuggestions([]);
 
-      mapRef.current?.animateToRegion(
-        {
-          ...coordinates,
-          latitudeDelta: 0.02,
-          longitudeDelta: 0.02,
-        },
-        700
-      );
+      moveMapTo(coordinates);
     } catch (error) {
       console.error("Current location error:", error);
 
@@ -421,20 +564,6 @@ export default function CreateTripScreen() {
         setRouteCoordinates(points);
         setRouteDistance(route.distance);
 
-        if (points.length > 0) {
-          mapRef.current?.fitToCoordinates(
-            [fromCoords, toCoords],
-            {
-              edgePadding: {
-                top: 70,
-                right: 55,
-                bottom: 70,
-                left: 55,
-              },
-              animated: true,
-            }
-          );
-        }
       } catch (error) {
         console.error("Route error:", error);
 
@@ -470,11 +599,11 @@ export default function CreateTripScreen() {
   // DATE PICKER
   // ---------------------------------------
 
-  const handleDateChange = (event: any, date?: Date) => {
+  const handleDateValueChange = (_event: any, date?: Date) => {
     const field = showDatePicker;
     setShowDatePicker(null);
 
-    if (event?.type === "dismissed" || !date || !field) return;
+    if (!date || !field) return;
 
     const value = toDateString(date);
 
@@ -483,21 +612,33 @@ export default function CreateTripScreen() {
       if (tripEndDate < value) setTripEndDate(value);
     } else {
       if (value < tripDate) {
-        Alert.alert("Invalid end date", "End date cannot be before the start date.");
+        Alert.alert(
+          "Invalid end date",
+          "End date cannot be before the start date."
+        );
         return;
       }
       setTripEndDate(value);
     }
   };
 
-  const handleTimeChange = (event: any, date?: Date) => {
+  const handleDateDismiss = () => {
+    setShowDatePicker(null);
+  };
+
+  const handleTimeValueChange = (_event: any, date?: Date) => {
     setShowTimePicker(false);
-    if (event?.type === "dismissed" || !date) return;
+
+    if (!date) return;
 
     setSelectedTime(date);
     const hours = String(date.getHours()).padStart(2, "0");
     const minutes = String(date.getMinutes()).padStart(2, "0");
     setDepartureTime(`${hours}:${minutes}`);
+  };
+
+  const handleTimeDismiss = () => {
+    setShowTimePicker(false);
   };
 
   const tripDurationDays = (() => {
@@ -870,75 +1011,43 @@ export default function CreateTripScreen() {
           </View>
 
           <View className="overflow-hidden rounded-3xl border border-gray-200 bg-white">
-            <MapView
+            <WebView
               ref={mapRef}
+              source={{ html: MAP_HTML }}
               style={{
                 width: "100%",
                 height: 320,
+                backgroundColor: "#e5e7eb",
               }}
-              initialRegion={INITIAL_REGION}
-              mapType="standard"
-              onPress={(event) => {
-                selectMapLocation(
-                  event.nativeEvent.coordinate
-                );
+              originWhitelist={["*"]}
+              javaScriptEnabled
+              domStorageEnabled
+              onMessage={(event) => {
+                try {
+                  const data = JSON.parse(event.nativeEvent.data);
+
+                  if (data.type === "map-ready") {
+                    setMapLoaded(true);
+                  }
+
+                  if (data.type === "map-tap") {
+                    selectMapLocation({
+                      latitude: data.latitude,
+                      longitude: data.longitude,
+                    });
+                  }
+
+                  if (data.type === "marker-drag") {
+                    moveMarker(data.field, {
+                      latitude: data.latitude,
+                      longitude: data.longitude,
+                    });
+                  }
+                } catch (error) {
+                  console.log("Map message error:", error);
+                }
               }}
-              showsCompass
-              showsScale
-              toolbarEnabled
-            >
-              {/* Pickup marker */}
-
-              {fromCoords && (
-                <Marker
-                  coordinate={{
-                    latitude: fromCoords.latitude,
-                    longitude: fromCoords.longitude,
-                  }}
-                  title="Pickup location"
-                  description={fromLocation}
-                  pinColor="green"
-                  draggable
-                  onDragEnd={(event) =>
-                    moveMarker(
-                      "from",
-                      event.nativeEvent.coordinate
-                    )
-                  }
-                />
-              )}
-
-              {/* Destination marker */}
-
-              {toCoords && (
-                <Marker
-                  coordinate={{
-                    latitude: toCoords.latitude,
-                    longitude: toCoords.longitude,
-                  }}
-                  title="Destination"
-                  description={toLocation}
-                  pinColor="red"
-                  draggable
-                  onDragEnd={(event) =>
-                    moveMarker(
-                      "to",
-                      event.nativeEvent.coordinate
-                    )
-                  }
-                />
-              )}
-
-              {/* Road route */}
-
-              {routeCoordinates.length > 0 && (
-                <Polyline
-                  coordinates={routeCoordinates}
-                  strokeColor="#2563EB"
-                  strokeWidth={5}
-                />
-              )}
-            </MapView>
+            />
 
             {/* MAP FOOTER */}
 
@@ -1015,7 +1124,8 @@ export default function CreateTripScreen() {
                 ? new Date(new Date().setHours(0, 0, 0, 0))
                 : parseDate(tripDate)
             }
-            onChange={handleDateChange}
+            onValueChange={handleDateValueChange}
+            onDismiss={handleDateDismiss}
           />
         )}
 
@@ -1061,7 +1171,8 @@ export default function CreateTripScreen() {
               mode="time"
               is24Hour={false}
               display="default"
-              onChange={handleTimeChange}
+              onValueChange={handleTimeValueChange}
+              onDismiss={handleTimeDismiss}
             />
           )}
         </View>
