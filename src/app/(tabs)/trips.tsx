@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -18,9 +19,10 @@ type Trip = {
   from_location: string;
   to_location: string;
   trip_date: string;
+  trip_end_date?: string | null;
   departure_time: string;
   available_seats: number;
-  trip_cost: number;
+  trip_cost: number | string;
   travel_type: string;
   description?: string;
   status: string;
@@ -62,8 +64,16 @@ export default function MyTripsScreen() {
     loadMyTrips();
   }, []);
 
+  // Parse YYYY-MM-DD as a local date to avoid timezone shifts.
+  const parseDate = (value: string) => {
+    const [year, month, day] = value.slice(0, 10).split("-").map(Number);
+    return new Date(year, month - 1, day, 12, 0, 0, 0);
+  };
+
   const formatDate = (date: string) => {
-    const parsedDate = new Date(date);
+    if (!date) return "Not specified";
+
+    const parsedDate = parseDate(date);
 
     if (Number.isNaN(parsedDate.getTime())) {
       return date;
@@ -76,69 +86,207 @@ export default function MyTripsScreen() {
     });
   };
 
+  // Inclusive duration: both start and end dates count.
+  const getDuration = (start: string, end?: string | null) => {
+    if (!start) return null;
+
+    const startDate = parseDate(start);
+    const endDate = parseDate(end || start);
+
+    if (
+      Number.isNaN(startDate.getTime()) ||
+      Number.isNaN(endDate.getTime())
+    ) {
+      return null;
+    }
+
+    const difference = Math.round(
+      (endDate.getTime() - startDate.getTime()) / 86400000
+    );
+
+    return difference >= 0 ? difference + 1 : null;
+  };
+
   const formatTime = (time: string) => {
-    if (!time) return "";
+    if (!time) return "Not specified";
 
-    const [hours, minutes] = time.split(":");
-    const hour = Number(hours);
+    const [hours, minutes] = time.split(":").map(Number);
 
-    if (Number.isNaN(hour)) {
+    if (
+      Number.isNaN(hours) ||
+      Number.isNaN(minutes) ||
+      hours > 23 ||
+      minutes > 59
+    ) {
       return time;
     }
 
-    const period = hour >= 12 ? "PM" : "AM";
-    const formattedHour = hour % 12 || 12;
+    const date = new Date();
+    date.setHours(hours, minutes, 0, 0);
 
-    return `${formattedHour}:${minutes} ${period}`;
+    return date.toLocaleTimeString("en-IN", {
+      hour: "numeric",
+      minute: "2-digit",
+    });
   };
 
-  const renderTripCard = (trip: Trip, type: "created" | "joined") => {
+  const formatCost = (cost: number | string) => {
+    const amount = Number(cost);
+
+    if (!Number.isFinite(amount)) return `₹${cost}`;
+
+    return `₹${amount.toLocaleString("en-IN", {
+      maximumFractionDigits: 2,
+    })}`;
+  };
+
+  const renderTripCard = (
+    trip: Trip,
+    type: "created" | "joined"
+  ) => {
+    const duration = getDuration(
+      trip.trip_date,
+      trip.trip_end_date
+    );
+
     return (
-      <View key={trip.id} className="mb-4">
+      <View key={trip.id} className="mb-5">
         <Card>
-          <View className="flex-row items-center justify-between">
-            <Text className="text-lg font-bold text-gray-900">
-              {trip.from_location}
-            </Text>
+          {/* ROUTE */}
+          <Text className="mb-3 text-xs font-bold tracking-wider text-gray-500">
+            JOURNEY ROUTE
+          </Text>
 
-            <Text className="text-lg font-bold text-blue-600">
-              →
-            </Text>
+          <View className="flex-row items-start">
+            <View className="mr-3 items-center pt-1">
+              <View className="h-3 w-3 rounded-full bg-green-600" />
+              <View className="my-1 h-9 w-0.5 bg-gray-300" />
+              <View className="h-3 w-3 rounded-full bg-red-500" />
+            </View>
 
-            <Text className="text-lg font-bold text-gray-900">
-              {trip.to_location}
-            </Text>
-          </View>
-
-          <View className="mt-4">
-            <Text className="text-sm text-gray-500">
-              📅 {formatDate(trip.trip_date)}
-            </Text>
-
-            <Text className="mt-2 text-sm text-gray-500">
-              🕐 {formatTime(trip.departure_time)}
-            </Text>
-
-            <Text className="mt-2 text-sm text-gray-500">
-              🚗 {trip.travel_type}
-            </Text>
-
-            <Text className="mt-2 text-sm text-gray-500">
-              👥 {trip.available_seats} seats available
-            </Text>
-
-            <Text className="mt-2 text-sm text-gray-500">
-              💰 ₹{trip.trip_cost}
-            </Text>
-          </View>
-
-          {type === "joined" && trip.creator_name ? (
-            <View className="mt-4 rounded-xl bg-gray-50 p-3">
-              <Text className="text-sm font-semibold text-gray-700">
-                Trip created by
+            <View className="flex-1">
+              <Text className="text-base font-bold text-gray-900">
+                {trip.from_location}
               </Text>
 
-              <Text className="mt-1 text-base font-bold text-gray-900">
+              <View className="h-9 justify-center">
+                <Text className="text-xs text-gray-400">
+                  DESTINATION
+                </Text>
+              </View>
+
+              <Text className="text-base font-bold text-gray-900">
+                {trip.to_location}
+              </Text>
+            </View>
+          </View>
+
+          {/* DATES */}
+          <View className="mt-5 border-t border-gray-100 pt-4">
+            <Text className="text-xs font-bold tracking-wider text-gray-500">
+              TRIP SCHEDULE
+            </Text>
+
+            <View className="mt-3 flex-row">
+              <View className="flex-1 pr-2">
+                <Text className="text-xs text-gray-500">
+                  START DATE
+                </Text>
+
+                <Text className="mt-1 text-sm font-bold text-gray-900">
+                  {formatDate(trip.trip_date)}
+                </Text>
+              </View>
+
+              <View className="flex-1 pl-2">
+                <Text className="text-xs text-gray-500">
+                  END DATE
+                </Text>
+
+                <Text className="mt-1 text-sm font-bold text-gray-900">
+                  {formatDate(
+                    trip.trip_end_date || trip.trip_date
+                  )}
+                </Text>
+              </View>
+            </View>
+
+            <View className="mt-3 flex-row flex-wrap gap-2">
+              <View className="rounded-xl bg-blue-50 px-3 py-2">
+                <Text className="text-xs text-blue-600">
+                  DURATION
+                </Text>
+
+                <Text className="mt-1 font-bold text-blue-800">
+                  {duration !== null
+                    ? `${duration} ${duration === 1 ? "day" : "days"}`
+                    : "N/A"}
+                </Text>
+              </View>
+
+              <View className="rounded-xl bg-gray-100 px-3 py-2">
+                <Text className="text-xs text-gray-500">
+                  DEPARTURE
+                </Text>
+
+                <Text className="mt-1 font-bold text-gray-800">
+                  {formatTime(trip.departure_time)}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* TRIP INFORMATION */}
+          <View className="mt-4 flex-row flex-wrap border-t border-gray-100 pt-3">
+            <View className="w-1/2 py-2 pr-2">
+              <Text className="text-xs text-gray-500">
+                TRAVEL TYPE
+              </Text>
+
+              <Text className="mt-1 font-bold text-gray-900">
+                {trip.travel_type}
+              </Text>
+            </View>
+
+            <View className="w-1/2 py-2 pl-2">
+              <Text className="text-xs text-gray-500">
+                AVAILABLE SEATS
+              </Text>
+
+              <Text className="mt-1 font-bold text-gray-900">
+                {trip.available_seats}
+              </Text>
+            </View>
+
+            <View className="w-1/2 py-2 pr-2">
+              <Text className="text-xs text-gray-500">
+                COST PER PERSON
+              </Text>
+
+              <Text className="mt-1 font-bold text-gray-900">
+                {formatCost(trip.trip_cost)}
+              </Text>
+            </View>
+
+            <View className="w-1/2 py-2 pl-2">
+              <Text className="text-xs text-gray-500">
+                STATUS
+              </Text>
+
+              <Text className="mt-1 font-bold text-gray-900">
+                {trip.status || "Active"}
+              </Text>
+            </View>
+          </View>
+
+          {/* CREATOR DETAILS FOR JOINED TRIPS */}
+          {type === "joined" && trip.creator_name ? (
+            <View className="mt-4 rounded-xl bg-gray-50 p-3">
+              <Text className="text-xs font-bold text-gray-500">
+                TRIP CREATED BY
+              </Text>
+
+              <Text className="mt-2 text-base font-bold text-gray-900">
                 {trip.creator_name}
               </Text>
 
@@ -149,13 +297,14 @@ export default function MyTripsScreen() {
               ) : null}
 
               {trip.company ? (
-                <Text className="mt-1 text-sm text-blue-600">
+                <Text className="mt-1 text-sm font-semibold text-blue-600">
                   {trip.company}
                 </Text>
               ) : null}
             </View>
           ) : null}
 
+          {/* VIEW TRIP */}
           <View className="mt-5">
             <Button
               title="View Trip"
@@ -163,7 +312,7 @@ export default function MyTripsScreen() {
                 router.push({
                   pathname: "/trip-details",
                   params: { id: trip.id },
-                }) 
+                })
               }
             />
           </View>
@@ -175,7 +324,7 @@ export default function MyTripsScreen() {
   if (loading) {
     return (
       <View className="flex-1 items-center justify-center bg-gray-50">
-        <ActivityIndicator size="large" />
+        <ActivityIndicator size="large" color="#2563EB" />
 
         <Text className="mt-4 text-base text-gray-500">
           Loading your trips...
@@ -188,8 +337,10 @@ export default function MyTripsScreen() {
     <ScrollView
       className="flex-1 bg-gray-50"
       showsVerticalScrollIndicator={false}
+      contentContainerStyle={{ paddingBottom: 40 }}
     >
-      <View className="px-6 pb-12 pt-14">
+      <View className="px-5 pb-10 pt-8">
+
         {/* HEADER */}
         <Text className="text-3xl font-bold text-gray-900">
           My Trips

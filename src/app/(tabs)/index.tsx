@@ -44,10 +44,18 @@ export default function HomeScreen() {
         />
       </View>
 
+      {/* Temporary Map Test */}
+      <View className="mt-4">
+              <Button
+                title="Test Map"
+                onPress={() => router.push("/map-test")}
+              />
+            </View>
+
       {/* Safety */}
       <View className="mt-10 rounded-2xl bg-red-50 p-5">
         <Text className="text-lg font-bold text-red-700">
-          🆘 Safety
+          🆘 Safety woww
         </Text>
 
         <Text className="mt-2 text-sm leading-5 text-red-600">

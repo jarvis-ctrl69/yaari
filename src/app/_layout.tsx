@@ -59,7 +59,7 @@ export default function RootLayout() {
         />
 
         <Stack.Screen
-  name="group"
+  name="groups"
   options={{ title: "Trip Group" }}
 />
       </Stack>

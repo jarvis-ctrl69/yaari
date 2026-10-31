@@ -4,6 +4,7 @@ import { pool } from "../db";
 const router = Router();
 
 // CREATE TRIP
+// CREATE TRIP
 router.post("/", async (req, res) => {
   try {
     const {
@@ -11,6 +12,7 @@ router.post("/", async (req, res) => {
       from_location,
       to_location,
       trip_date,
+      trip_end_date,
       departure_time,
       available_seats,
       trip_cost,
@@ -23,14 +25,61 @@ router.post("/", async (req, res) => {
       !from_location ||
       !to_location ||
       !trip_date ||
+      !trip_end_date ||
       !departure_time ||
-      !available_seats ||
+      available_seats === undefined ||
       trip_cost === undefined ||
       !travel_type
     ) {
       return res.status(400).json({
         success: false,
         message: "Required trip fields are missing",
+      });
+    }
+
+    // Validate date format
+    const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+
+    if (
+      !datePattern.test(trip_date) ||
+      !datePattern.test(trip_end_date)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Dates must use YYYY-MM-DD format",
+      });
+    }
+
+    // Validate date order
+    if (trip_end_date < trip_date) {
+      return res.status(400).json({
+        success: false,
+        message: "End date cannot be before start date",
+      });
+    }
+
+    // Validate time format
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(departure_time)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid departure time",
+      });
+    }
+
+    const seats = Number(available_seats);
+    const cost = Number(trip_cost);
+
+    if (!Number.isInteger(seats) || seats <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Available seats must be positive",
+      });
+    }
+
+    if (!Number.isFinite(cost) || cost < 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid trip cost",
       });
     }
 
@@ -41,13 +90,14 @@ router.post("/", async (req, res) => {
         from_location,
         to_location,
         trip_date,
+        trip_end_date,
         departure_time,
         available_seats,
         trip_cost,
         travel_type,
         description
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING *
       `,
       [
@@ -55,11 +105,12 @@ router.post("/", async (req, res) => {
         from_location,
         to_location,
         trip_date,
+        trip_end_date,
         departure_time,
-        available_seats,
-        trip_cost,
+        seats,
+        cost,
         travel_type,
-        description,
+        description || null,
       ]
     );
 
@@ -68,6 +119,7 @@ router.post("/", async (req, res) => {
       message: "Trip created successfully",
       trip: result.rows[0],
     });
+
   } catch (error) {
     console.error("Create trip error:", error);
 

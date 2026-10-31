@@ -4,6 +4,7 @@ import { router } from "expo-router";
 import Button from "@/components/Button";
 
 export default function HomeScreen() {
+  console.log("🔥 AUTH HOME FILE IS RUNNING");
   return (
     <View className="flex-1 bg-gray-50 px-6 pt-16">
       <Text className="text-4xl font-bold text-blue-600">
@@ -36,13 +37,21 @@ export default function HomeScreen() {
       <View className="mt-4">
         <Button
           title="My Trips"
-          onPress={() => {}}
+          onPress={() => router.push("/(tabs)/trips")}
+        />
+      </View>
+
+      {/* Temporary Map Test */}
+      <View className="mt-4">
+        <Button
+          title="Test Map"
+          onPress={() => router.push("/map-test")}
         />
       </View>
 
       <View className="mt-10 rounded-2xl bg-red-50 p-5">
         <Text className="text-lg font-bold text-red-700">
-          🆘 Safety
+          🆘 Safety wow
         </Text>
 
         <Text className="mt-2 text-sm leading-5 text-red-600">

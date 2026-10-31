@@ -1,14 +1,7 @@
 const API_URL = "http://192.168.31.159:3000";
-
-export async function checkBackend() {
-  const response = await fetch(`${API_URL}/api/health`);
-
-  if (!response.ok) {
-    throw new Error("Backend request failed");
-  }
-
-  return response.json();
-}
+// ===============================
+// PROFILE
+// ===============================
 
 type CreateProfileData = {
   id: string;
@@ -54,13 +47,32 @@ export async function getProfiles() {
   return result.profiles;
 }
 
-// trip creation function
+export async function getProfile(id: string) {
+  const response = await fetch(`${API_URL}/api/profiles/${id}`);
+
+  if (response.status === 404) {
+    return null;
+  }
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(result.message || "Failed to fetch profile");
+  }
+
+  return result.profile;
+}
+
+// ===============================
+// TRIPS
+// ===============================
 
 type CreateTripData = {
   creator_id: string;
   from_location: string;
   to_location: string;
   trip_date: string;
+  trip_end_date: string; // NEW: Trip end date
   departure_time: string;
   available_seats: number;
   trip_cost: number;
@@ -85,25 +97,8 @@ export async function createTrip(data: CreateTripData) {
 
   return result.trip;
 }
-// lookup
-export async function getProfile(id: string) {
-  const response = await fetch(`${API_URL}/api/profiles/${id}`);
 
-  if (response.status === 404) {
-    return null;
-  }
-
-  const result = await response.json();
-
-  if (!response.ok) {
-    throw new Error(result.message || "Failed to fetch profile");
-  }
-
-  return result.profile;
-}
-
-//explore trips
-
+// Get all active trips
 export async function getTrips() {
   const response = await fetch(`${API_URL}/api/trips`);
 
@@ -116,7 +111,7 @@ export async function getTrips() {
   return result.trips;
 }
 
-//with id 
+// Get single trip
 export async function getTrip(id: string) {
   const response = await fetch(`${API_URL}/api/trips/${id}`);
 
@@ -133,7 +128,28 @@ export async function getTrip(id: string) {
   return result.trip;
 }
 
-// request trip
+// Get my trips
+export async function getMyTrips(userId: string) {
+  const response = await fetch(
+    `${API_URL}/api/trips/my/${userId}`
+  );
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      result.message || "Failed to fetch my trips"
+    );
+  }
+
+  return result;
+}
+
+// ===============================
+// TRIP REQUESTS
+// ===============================
+
+// Request to join a trip
 export async function requestToJoinTrip(
   trip_id: string,
   requester_id: string
@@ -160,8 +176,7 @@ export async function requestToJoinTrip(
   return result.request;
 }
 
-// request status
-
+// Get requests for a trip
 export async function getTripRequests(tripId: string) {
   const response = await fetch(
     `${API_URL}/api/trip-requests/${tripId}`
@@ -178,8 +193,7 @@ export async function getTripRequests(tripId: string) {
   return result.requests;
 }
 
-// accept / reject
-
+// Accept / reject trip request
 export async function updateTripRequest(
   requestId: string,
   status: "accepted" | "rejected",
@@ -210,23 +224,10 @@ export async function updateTripRequest(
   return result.request;
 }
 
-// get my trips
-export async function getMyTrips(userId: string) {
-  const response = await fetch(
-    `${API_URL}/api/trips/my/${userId}`
-  );
+// ===============================
+// TRIP GROUPS
+// ===============================
 
-  const result = await response.json();
-
-  if (!response.ok) {
-    throw new Error(
-      result.message || "Failed to fetch my trips"
-    );
-  }
-
-  return result;
-}
-// groups
 export async function getTripGroup(tripId: string) {
   const response = await fetch(
     `${API_URL}/api/groups/trip/${tripId}`

@@ -54,6 +54,13 @@ export default function LandingScreen() {
           />
         </View>
 
+        <View className="mt-4">
+                <Button
+                  title="Test Map"
+                  onPress={() => router.push("/map-test")}
+                />
+        </View>
+
         {backendStatus ? (
           <Text className="mt-4 text-center text-base font-semibold text-green-600">
             {backendStatus}
