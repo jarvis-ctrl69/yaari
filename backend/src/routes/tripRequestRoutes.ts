@@ -7,7 +7,15 @@ const router = Router();
 // REQUEST TO JOIN A TRIP
 router.post("/", async (req, res) => {
   try {
-    const { trip_id, requester_id } = req.body;
+    const {
+      trip_id,
+      requester_id,
+      intro_message,
+      route_confirmed,
+      schedule_confirmed,
+      travel_type_confirmed,
+      cost_confirmed,
+    } = req.body;
 
     if (!trip_id || !requester_id) {
       return res.status(400).json({
@@ -16,13 +24,34 @@ router.post("/", async (req, res) => {
       });
     }
 
+    if (
+      typeof intro_message !== "string" ||
+      !intro_message.trim() ||
+      intro_message.trim().length > 300
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Introduction must contain 1 to 300 characters",
+      });
+    }
+
+    const confirmations = [
+      route_confirmed,
+      schedule_confirmed,
+      travel_type_confirmed,
+      cost_confirmed,
+    ];
+
+    if (!confirmations.every((value) => value === true)) {
+      return res.status(400).json({
+        success: false,
+        message: "Please confirm all four trip requirements",
+      });
+    }
+
     // Check that the trip exists
     const tripResult = await pool.query(
-      `
-      SELECT *
-      FROM trips
-      WHERE id = $1
-      `,
+      `SELECT * FROM trips WHERE id = $1`,
       [trip_id]
     );
 
@@ -35,7 +64,6 @@ router.post("/", async (req, res) => {
 
     const trip = tripResult.rows[0];
 
-    // Prevent the trip creator from requesting their own trip
     if (trip.creator_id === requester_id) {
       return res.status(400).json({
         success: false,
@@ -43,17 +71,61 @@ router.post("/", async (req, res) => {
       });
     }
 
-    // Create request
+    if (trip.status !== "active") {
+      return res.status(400).json({
+        success: false,
+        message: "This trip is no longer active",
+      });
+    }
+
+    // Check available seats
+    const seatsResult = await pool.query(
+      `
+      SELECT
+        trips.available_seats -
+        (
+          SELECT COUNT(*)
+          FROM trip_requests
+          WHERE trip_requests.trip_id = trips.id
+          AND trip_requests.status = 'accepted'
+        ) AS seats_left
+      FROM trips
+      WHERE trips.id = $1
+      `,
+      [trip_id]
+    );
+
+    if (Number(seatsResult.rows[0].seats_left) <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "This trip has no available seats",
+      });
+    }
+
+    // Create request with compatibility information
     const result = await pool.query(
       `
       INSERT INTO trip_requests (
         trip_id,
-        requester_id
+        requester_id,
+        intro_message,
+        route_confirmed,
+        schedule_confirmed,
+        travel_type_confirmed,
+        cost_confirmed
       )
-      VALUES ($1, $2)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING *
       `,
-      [trip_id, requester_id]
+      [
+        trip_id,
+        requester_id,
+        intro_message.trim(),
+        route_confirmed,
+        schedule_confirmed,
+        travel_type_confirmed,
+        cost_confirmed,
+      ]
     );
 
     return res.status(201).json({
@@ -116,10 +188,11 @@ router.get("/:tripId", async (req, res) => {
 
 // ACCEPT OR REJECT A TRIP REQUEST
 router.patch("/:requestId", async (req, res) => {
-  const client = await pool.connect();
-  let transactionStarted = false;
+  let client;
 
   try {
+    client = await pool.connect();
+
     const { requestId } = req.params;
     const { status, user_id } = req.body;
 
@@ -137,17 +210,15 @@ router.patch("/:requestId", async (req, res) => {
       });
     }
 
-    // Start transaction
     await client.query("BEGIN");
-    transactionStarted = true;
 
-    // Find request and lock it while processing
     const requestResult = await client.query(
       `
       SELECT
         trip_requests.id,
         trip_requests.trip_id,
         trip_requests.requester_id,
+        trip_requests.status,
         trips.creator_id
       FROM trip_requests
       JOIN trips
@@ -160,7 +231,6 @@ router.patch("/:requestId", async (req, res) => {
 
     if (requestResult.rows.length === 0) {
       await client.query("ROLLBACK");
-      transactionStarted = false;
 
       return res.status(404).json({
         success: false,
@@ -170,10 +240,8 @@ router.patch("/:requestId", async (req, res) => {
 
     const request = requestResult.rows[0];
 
-    // Only the trip creator can accept/reject
     if (request.creator_id !== user_id) {
       await client.query("ROLLBACK");
-      transactionStarted = false;
 
       return res.status(403).json({
         success: false,
@@ -181,7 +249,50 @@ router.patch("/:requestId", async (req, res) => {
       });
     }
 
-    // Update request status
+    if (request.status !== "pending") {
+      await client.query("ROLLBACK");
+
+      return res.status(400).json({
+        success: false,
+        message: "This request has already been processed",
+      });
+    }
+
+    if (status === "accepted") {
+      // Lock trip row and verify available seats
+      const tripResult = await client.query(
+        `
+        SELECT available_seats
+        FROM trips
+        WHERE id = $1
+        FOR UPDATE
+        `,
+        [request.trip_id]
+      );
+
+      const acceptedResult = await client.query(
+        `
+        SELECT COUNT(*)::int AS accepted_count
+        FROM trip_requests
+        WHERE trip_id = $1
+          AND status = 'accepted'
+        `,
+        [request.trip_id]
+      );
+
+      if (
+        acceptedResult.rows[0].accepted_count >=
+        tripResult.rows[0].available_seats
+      ) {
+        await client.query("ROLLBACK");
+
+        return res.status(400).json({
+          success: false,
+          message: "No available seats remain for this trip",
+        });
+      }
+    }
+
     const result = await client.query(
       `
       UPDATE trip_requests
@@ -192,9 +303,7 @@ router.patch("/:requestId", async (req, res) => {
       [status, requestId]
     );
 
-    // If accepted, create group and add both members
     if (status === "accepted") {
-      // Create group if it does not already exist
       const groupResult = await client.query(
         `
         INSERT INTO trip_groups (trip_id)
@@ -208,7 +317,7 @@ router.patch("/:requestId", async (req, res) => {
 
       const group = groupResult.rows[0];
 
-      // Add trip creator as admin
+      // Add creator as admin
       await client.query(
         `
         INSERT INTO trip_group_members (
@@ -223,7 +332,7 @@ router.patch("/:requestId", async (req, res) => {
         [group.id, request.creator_id]
       );
 
-      // Add accepted requester as member
+      // Add accepted traveller as member
       await client.query(
         `
         INSERT INTO trip_group_members (
@@ -239,9 +348,7 @@ router.patch("/:requestId", async (req, res) => {
       );
     }
 
-    // Commit all changes together
     await client.query("COMMIT");
-    transactionStarted = false;
 
     return res.status(200).json({
       success: true,
@@ -249,22 +356,22 @@ router.patch("/:requestId", async (req, res) => {
       request: result.rows[0],
     });
   } catch (error) {
-    console.error("Update trip request error:", error);
-
-    if (transactionStarted) {
+    if (client) {
       try {
         await client.query("ROLLBACK");
       } catch (rollbackError) {
-        console.error("Transaction rollback error:", rollbackError);
+        console.error("Rollback error:", rollbackError);
       }
     }
+
+    console.error("Update trip request error:", error);
 
     return res.status(500).json({
       success: false,
       message: "Failed to update trip request",
     });
   } finally {
-    client.release();
+    client?.release();
   }
 });
 

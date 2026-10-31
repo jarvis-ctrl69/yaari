@@ -1,9 +1,11 @@
+
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   ScrollView,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
@@ -40,7 +42,16 @@ export default function TripDetailsScreen() {
   const [loading, setLoading] = useState(true);
   const [requesting, setRequesting] = useState(false);
   const [requestSent, setRequestSent] = useState(false);
+  const [showRequestForm, setShowRequestForm] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  const [introMessage, setIntroMessage] = useState("");
+  const [confirmations, setConfirmations] = useState({
+    route: false,
+    schedule: false,
+    travelType: false,
+    cost: false,
+  });
 
   useEffect(() => {
     const loadTrip = async () => {
@@ -51,16 +62,16 @@ export default function TripDetailsScreen() {
       }
 
       try {
-        const { data: { user } } = await supabase.auth.getUser();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
 
         setCurrentUserId(user?.id ?? null);
 
         const data = await getTrip(id);
-
         setTrip(data);
       } catch (error) {
         console.error("Failed to load trip:", error);
-
         Alert.alert(
           "Unable to load trip",
           "Something went wrong while loading this trip."
@@ -81,7 +92,6 @@ export default function TripDetailsScreen() {
     Number(trip?.seats_left ?? trip?.available_seats ?? 0)
   );
 
-  // Parse dates as local dates to avoid timezone shifting.
   const parseDate = (value: string) => {
     const [year, month, day] = value.slice(0, 10).split("-").map(Number);
     return new Date(year, month - 1, day, 12);
@@ -101,7 +111,6 @@ export default function TripDetailsScreen() {
     });
   };
 
-  // Inclusive duration: start date and end date both count.
   const getDuration = () => {
     if (!trip) return 0;
 
@@ -146,8 +155,21 @@ export default function TripDetailsScreen() {
     return `₹${amount.toLocaleString("en-IN")}`;
   };
 
-if (requesting || requestSent) return;
+  const allConfirmed = Object.values(confirmations).every(Boolean);
+
+  const updateConfirmation = (
+    key: keyof typeof confirmations,
+    value: boolean
+  ) => {
+    setConfirmations((previous) => ({
+      ...previous,
+      [key]: value,
+    }));
+  };
+
   const handleRequestToJoin = async () => {
+    if (requesting || requestSent) return;
+
     if (!trip || !currentUserId) {
       Alert.alert("Login required", "Please log in first.");
       return;
@@ -163,25 +185,48 @@ if (requesting || requestSent) return;
       return;
     }
 
+    if (!allConfirmed) {
+      Alert.alert(
+        "Confirm trip requirements",
+        "Please confirm all four trip requirements."
+      );
+      return;
+    }
+
+    if (!introMessage.trim() || introMessage.trim().length > 300) {
+      Alert.alert(
+        "Introduction required",
+        "Please write an introduction between 1 and 300 characters."
+      );
+      return;
+    }
+
     try {
       setRequesting(true);
 
-      await requestToJoinTrip(trip.id, currentUserId);
+      await requestToJoinTrip({
+        trip_id: trip.id,
+        requester_id: currentUserId,
+        intro_message: introMessage.trim(),
+        route_confirmed: confirmations.route,
+        schedule_confirmed: confirmations.schedule,
+        travel_type_confirmed: confirmations.travelType,
+        cost_confirmed: confirmations.cost,
+      });
 
       setRequestSent(true);
+      setShowRequestForm(false);
 
       Alert.alert(
-        "Request sent",
-        "Your request to join this trip has been sent."
+        "Request sent!",
+        "Your introduction and trip confirmations have been shared with the trip creator."
       );
     } catch (error) {
       console.error("Request failed:", error);
 
       Alert.alert(
         "Unable to send request",
-        error instanceof Error
-          ? error.message
-          : "Something went wrong."
+        error instanceof Error ? error.message : "Something went wrong."
       );
     } finally {
       setRequesting(false);
@@ -192,7 +237,6 @@ if (requesting || requestSent) return;
     return (
       <View className="flex-1 items-center justify-center bg-gray-50">
         <ActivityIndicator size="large" color="#2563EB" />
-
         <Text className="mt-4 text-base text-gray-500">
           Loading trip...
         </Text>
@@ -206,17 +250,42 @@ if (requesting || requestSent) return;
         <Text className="text-2xl font-bold text-gray-900">
           Trip not found
         </Text>
-
         <Text className="mt-2 text-center text-base text-gray-500">
           This trip may no longer be available.
         </Text>
-
         <View className="mt-5 w-full">
           <Button title="Go Back" onPress={() => router.back()} />
         </View>
       </View>
     );
   }
+
+  const confirmationItems: {
+    key: keyof typeof confirmations;
+    title: string;
+    description: string;
+  }[] = [
+    {
+      key: "route",
+      title: "Route confirmation",
+      description: "I agree with the pickup and drop-off locations.",
+    },
+    {
+      key: "schedule",
+      title: "Schedule confirmation",
+      description: "The travel dates and departure time work for me.",
+    },
+    {
+      key: "travelType",
+      title: "Travel preference",
+      description: `I am comfortable travelling by ${trip.travel_type}.`,
+    },
+    {
+      key: "cost",
+      title: "Cost agreement",
+      description: `I agree to the displayed trip cost of ${formatCost(trip.trip_cost)}.`,
+    },
+  ];
 
   return (
     <ScrollView
@@ -225,9 +294,6 @@ if (requesting || requestSent) return;
       contentContainerStyle={{ paddingBottom: 40 }}
     >
       <View className="px-5 pb-8 pt-8">
-
-        {/* HEADER */}
-
         <Text className="text-3xl font-bold text-gray-900">
           Trip Details
         </Text>
@@ -237,7 +303,6 @@ if (requesting || requestSent) return;
         </Text>
 
         {/* ROUTE */}
-
         <View className="mt-6">
           <Card>
             <Text className="text-xs font-bold text-gray-500">
@@ -247,9 +312,7 @@ if (requesting || requestSent) return;
             <View className="mt-5 flex-row">
               <View className="mr-4 items-center">
                 <View className="h-3 w-3 rounded-full bg-green-600" />
-
                 <View className="my-1 h-12 w-0.5 bg-gray-300" />
-
                 <View className="h-3 w-3 rounded-full bg-red-500" />
               </View>
 
@@ -272,8 +335,7 @@ if (requesting || requestSent) return;
           </Card>
         </View>
 
-        {/* TRIP DATES */}
-
+        {/* DATES */}
         <View className="mt-5">
           <Card>
             <Text className="text-xs font-bold text-gray-500">
@@ -282,20 +344,14 @@ if (requesting || requestSent) return;
 
             <View className="mt-4 flex-row">
               <View className="flex-1 pr-2">
-                <Text className="text-xs text-gray-500">
-                  START DATE
-                </Text>
-
+                <Text className="text-xs text-gray-500">START DATE</Text>
                 <Text className="mt-2 text-base font-bold text-gray-900">
                   {formatDate(trip.trip_date)}
                 </Text>
               </View>
 
               <View className="flex-1 pl-2">
-                <Text className="text-xs text-gray-500">
-                  END DATE
-                </Text>
-
+                <Text className="text-xs text-gray-500">END DATE</Text>
                 <Text className="mt-2 text-base font-bold text-gray-900">
                   {formatDate(trip.trip_end_date || trip.trip_date)}
                 </Text>
@@ -304,10 +360,7 @@ if (requesting || requestSent) return;
 
             <View className="mt-5 flex-row flex-wrap gap-3">
               <View className="min-w-[120px] flex-1 rounded-xl bg-blue-50 p-3">
-                <Text className="text-xs text-blue-700">
-                  DURATION
-                </Text>
-
+                <Text className="text-xs text-blue-700">DURATION</Text>
                 <Text className="mt-1 text-lg font-bold text-blue-800">
                   {getDuration()} {getDuration() === 1 ? "day" : "days"}
                 </Text>
@@ -317,7 +370,6 @@ if (requesting || requestSent) return;
                 <Text className="text-xs text-gray-600">
                   DEPARTURE TIME
                 </Text>
-
                 <Text className="mt-1 text-lg font-bold text-gray-900">
                   {formatTime(trip.departure_time)}
                 </Text>
@@ -331,7 +383,6 @@ if (requesting || requestSent) return;
         </View>
 
         {/* TRIP INFORMATION */}
-
         <View className="mt-5">
           <Card>
             <Text className="text-xs font-bold text-gray-500">
@@ -339,51 +390,24 @@ if (requesting || requestSent) return;
             </Text>
 
             <View className="mt-4 flex-row flex-wrap">
-              <View className="w-1/2 py-3 pr-2">
-                <Text className="text-sm text-gray-500">
-                  Travel type
-                </Text>
-
-                <Text className="mt-1 text-base font-bold text-gray-900">
-                  {trip.travel_type}
-                </Text>
-              </View>
-
-              <View className="w-1/2 py-3 pl-2">
-                <Text className="text-sm text-gray-500">
-                  Cost per person
-                </Text>
-
-                <Text className="mt-1 text-base font-bold text-gray-900">
-                  {formatCost(trip.trip_cost)}
-                </Text>
-              </View>
-
-              <View className="w-1/2 py-3 pr-2">
-                <Text className="text-sm text-gray-500">
-                  Seats offered
-                </Text>
-
-                <Text className="mt-1 text-base font-bold text-gray-900">
-                  {trip.available_seats}
-                </Text>
-              </View>
-
-              <View className="w-1/2 py-3 pl-2">
-                <Text className="text-sm text-gray-500">
-                  Seats remaining
-                </Text>
-
-                <Text className="mt-1 text-base font-bold text-gray-900">
-                  {seatsLeft}
-                </Text>
-              </View>
+              {[
+                ["Travel type", trip.travel_type],
+                ["Cost per person", formatCost(trip.trip_cost)],
+                ["Seats offered", String(trip.available_seats)],
+                ["Seats remaining", String(seatsLeft)],
+              ].map(([label, value]) => (
+                <View key={label} className="w-1/2 py-3">
+                  <Text className="text-sm text-gray-500">{label}</Text>
+                  <Text className="mt-1 text-base font-bold text-gray-900">
+                    {value}
+                  </Text>
+                </View>
+              ))}
             </View>
           </Card>
         </View>
 
-        {/* CREATOR DETAILS */}
-
+        {/* CREATOR */}
         <View className="mt-5">
           <Card>
             <Text className="text-xs font-bold text-gray-500">
@@ -415,14 +439,12 @@ if (requesting || requestSent) return;
         </View>
 
         {/* DESCRIPTION */}
-
         {trip.description ? (
           <View className="mt-5">
             <Card>
               <Text className="text-xs font-bold text-gray-500">
                 ABOUT THIS TRIP
               </Text>
-
               <Text className="mt-3 text-base leading-6 text-gray-700">
                 {trip.description}
               </Text>
@@ -430,38 +452,145 @@ if (requesting || requestSent) return;
           </View>
         ) : null}
 
-        {/* JOIN REQUEST */}
-
+        {/* REQUEST AREA */}
         <View className="mt-6">
           {isCreator ? (
             <View className="rounded-xl border border-blue-100 bg-blue-50 p-4">
               <Text className="font-semibold text-blue-800">
                 You created this trip.
               </Text>
-
               <Text className="mt-1 text-sm text-blue-700">
                 You can manage incoming join requests below.
               </Text>
             </View>
+          ) : requestSent ? (
+            <View className="rounded-xl border border-green-200 bg-green-50 p-4">
+              <Text className="font-bold text-green-800">
+                Request sent successfully!
+              </Text>
+              <Text className="mt-1 text-sm text-green-700">
+                The creator can now review your introduction and confirmations.
+              </Text>
+            </View>
+          ) : seatsLeft <= 0 ? (
+            <View className="rounded-xl bg-gray-100 p-4">
+              <Text className="font-semibold text-gray-600">
+                No seats available
+              </Text>
+            </View>
           ) : (
-            <Button
-              title={
-                requesting
-                  ? "Sending Request..."
-                  : requestSent
-                  ? "Request Sent"
-                  : seatsLeft <= 0
-                  ? "No Seats Available"
-                  : "Request to Join"
-              }
-              onPress={handleRequestToJoin}
-              // disabled={requesting || requestSent || seatsLeft <= 0}
-            />
+            <>
+              {!showRequestForm ? (
+                <Button
+                  title="Request to Join"
+                  onPress={() => setShowRequestForm(true)}
+                />
+              ) : (
+                <Card>
+                  <Text className="text-xl font-bold text-gray-900">
+                    Ready to travel together?
+                  </Text>
+                  <Text className="mt-2 text-sm leading-5 text-gray-500">
+                    Confirm the trip requirements and introduce yourself to the creator.
+                  </Text>
+
+                  <View className="mt-5">
+                    <Text className="text-base font-bold text-gray-900">
+                      Confirm your travel preferences
+                    </Text>
+
+                    {confirmationItems.map((item) => (
+                      <View
+                        key={item.key}
+                        className="mt-3 flex-row items-start"
+                      >
+                        <View className="mr-3 mt-1">
+                          <View
+                            className={`h-6 w-6 items-center justify-center rounded-md border ${
+                              confirmations[item.key]
+                                ? "border-blue-600 bg-blue-600"
+                                : "border-gray-300 bg-white"
+                            }`}
+                          >
+                            {confirmations[item.key] ? (
+                              <Text className="font-bold text-white">✓</Text>
+                            ) : null}
+                          </View>
+                        </View>
+
+                        <View className="flex-1">
+                          <Text className="font-semibold text-gray-900">
+                            {item.title}
+                          </Text>
+                          <Text className="mt-1 text-sm leading-5 text-gray-500">
+                            {item.description}
+                          </Text>
+
+                          <Text
+                            onPress={() =>
+                              updateConfirmation(
+                                item.key,
+                                !confirmations[item.key]
+                              )
+                            }
+                            className="mt-2 font-semibold text-blue-600"
+                          >
+                            {confirmations[item.key]
+                              ? "Confirmed ✓"
+                              : "Tap to confirm"}
+                          </Text>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+
+                  <View className="mt-6">
+                    <Text className="text-base font-bold text-gray-900">
+                      Introduce yourself
+                    </Text>
+                    <Text className="mt-1 text-sm text-gray-500">
+                      Tell the creator why you want to join.
+                    </Text>
+
+                    <TextInput
+                      value={introMessage}
+                      onChangeText={setIntroMessage}
+                      placeholder="Hi! I'm travelling to the same destination for..."
+                      multiline
+                      maxLength={300}
+                      textAlignVertical="top"
+                      className="mt-3 min-h-[110px] rounded-xl border border-gray-200 bg-white p-3 text-base text-gray-900"
+                    />
+
+                    <Text className="mt-1 text-right text-xs text-gray-400">
+                      {introMessage.length}/300 characters
+                    </Text>
+                  </View>
+
+                  <View className="mt-5">
+                    <Button
+                      title={
+                        requesting
+                          ? "Sending Request..."
+                          : "Send Join Request"
+                      }
+                      onPress={handleRequestToJoin}
+                    />
+                  </View>
+
+                  <View className="mt-3">
+                    <Button
+                      title="Cancel"
+                      onPress={() => setShowRequestForm(false)}
+                    />
+                  </View>
+                </Card>
+              )}
+            </>
           )}
         </View>
 
-        {/* CREATOR-ONLY REQUEST MANAGEMENT */}
-
+        {/* CREATOR REQUEST MANAGEMENT */}
         {isCreator ? (
           <View className="mt-4">
             <Button
@@ -477,7 +606,6 @@ if (requesting || requestSent) return;
         ) : null}
 
         {/* GROUP */}
-
         <View className="mt-4">
           <Button
             title="View Trip Group"
@@ -489,7 +617,6 @@ if (requesting || requestSent) return;
             }
           />
         </View>
-
       </View>
     </ScrollView>
   );

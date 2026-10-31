@@ -150,19 +150,26 @@ export async function getMyTrips(userId: string) {
 // ===============================
 
 // Request to join a trip
+
+export type JoinTripRequestData = {
+  trip_id: string;
+  requester_id: string;
+  intro_message: string;
+  route_confirmed: boolean;
+  schedule_confirmed: boolean;
+  travel_type_confirmed: boolean;
+  cost_confirmed: boolean;
+};
+
 export async function requestToJoinTrip(
-  trip_id: string,
-  requester_id: string
+  data: JoinTripRequestData
 ) {
   const response = await fetch(`${API_URL}/api/trip-requests`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      trip_id,
-      requester_id,
-    }),
+    body: JSON.stringify(data),
   });
 
   const result = await response.json();
@@ -175,6 +182,7 @@ export async function requestToJoinTrip(
 
   return result.request;
 }
+
 
 // Get requests for a trip
 export async function getTripRequests(tripId: string) {
