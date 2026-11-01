@@ -1,0 +1,42 @@
+import express from "express";
+import cors from "cors";
+import dotenv from "dotenv";
+import { pool } from "./db";
+import profileRoutes from "./routes/profileRoutes";
+import tripRoutes from "./routes/tripRoutes";
+import tripRequestRoutes from "./routes/tripRequestRoutes";
+import groupRoutes from "./routes/groupRoutes";
+
+dotenv.config();
+
+const app = express();
+const PORT = Number(process.env.PORT) || 3000;
+
+app.use(cors());
+app.use(express.json());
+app.use("/api/profiles", profileRoutes);
+app.use("/api/trips", tripRoutes);
+app.use("/api/trip-requests", tripRequestRoutes);
+app.use("/api/groups", groupRoutes);
+
+
+app.get("/api/health", (_req, res) => {
+  res.json({
+    success: true,
+    message: "Yaari backend is running",
+    
+  });
+});
+// db postggrace
+
+pool.query("SELECT NOW()")
+  .then(() => {
+    console.log("PostgreSQL connected successfully");
+  })
+  .catch((error) => {
+    console.error("PostgreSQL connection failed:", error);
+  });
+
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Yaari backend running on port ${PORT}`);
+});

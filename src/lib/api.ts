@@ -1,4 +1,5 @@
 const API_URL = "http://192.168.31.159:3000";
+import { supabase } from "./supabase";
 // ===============================
 // PROFILE
 // ===============================
@@ -260,4 +261,90 @@ export async function getTripGroup(tripId: string) {
   }
 
   return result;
+}
+
+// ========================================
+// GROUP MESSAGING
+// ========================================
+
+export type GroupMessage = {
+  id: string;
+  group_id: string;
+  sender_id: string;
+  message: string;
+  created_at: string;
+  sender_name: string;
+  profile_image_url?: string | null;
+};
+
+// Get authenticated user's Supabase access token
+async function getMessagingToken(): Promise<string> {
+  const {
+    data: { session },
+    error,
+  } = await supabase.auth.getSession();
+
+  if (error || !session?.access_token) {
+    throw new Error("Please log in again to use group messaging");
+  }
+
+  return session.access_token;
+}
+
+// Load group chat messages
+export async function getGroupMessages(groupId: string) {
+  const token = await getMessagingToken();
+
+  const response = await fetch(
+    `${API_URL}/api/messages/group/${groupId}`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    }
+  );
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(result.message || "Failed to load group messages");
+  }
+
+  return result as {
+    success: boolean;
+    messages: GroupMessage[];
+  };
+}
+
+// Send a group chat message
+export async function sendGroupMessage(
+  groupId: string,
+  message: string
+) {
+  const token = await getMessagingToken();
+
+  const response = await fetch(
+    `${API_URL}/api/messages/group/${groupId}`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ message }),
+    }
+  );
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(result.message || "Failed to send message");
+  }
+
+  return result as {
+    success: boolean;
+    message: GroupMessage;
+  };
 }
