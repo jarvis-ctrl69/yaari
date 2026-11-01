@@ -13,7 +13,6 @@ export default function TabsLayout() {
       indicatorColor={colors.backgroundElement}
       labelStyle={{ selected: { color: colors.text } }}
     >
-      {/* HOME */}
       <NativeTabs.Trigger name="index">
         <NativeTabs.Trigger.Label>Home</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon
@@ -22,7 +21,6 @@ export default function TabsLayout() {
         />
       </NativeTabs.Trigger>
 
-      {/* EXPLORE */}
       <NativeTabs.Trigger name="explore">
         <NativeTabs.Trigger.Label>Explore</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon
@@ -31,14 +29,28 @@ export default function TabsLayout() {
         />
       </NativeTabs.Trigger>
 
-      {/* TRIPS */}
       <NativeTabs.Trigger name="trips">
         <NativeTabs.Trigger.Label>Trips</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon
+          src={require("@/assets/images/tabIcons/trips.png")}
+          renderingMode="template"
+        />
       </NativeTabs.Trigger>
 
-      {/* PROFILE */}
+      <NativeTabs.Trigger name="notifications">
+        <NativeTabs.Trigger.Label>Alerts</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon
+          src={require("@/assets/images/tabIcons/alerts.png")}
+          renderingMode="template"
+        />
+      </NativeTabs.Trigger>
+
       <NativeTabs.Trigger name="profile">
         <NativeTabs.Trigger.Label>Profile</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon
+          src={require("@/assets/images/tabIcons/profile.png")}
+          renderingMode="template"
+        />
       </NativeTabs.Trigger>
     </NativeTabs>
   );

@@ -347,4 +347,119 @@ export async function sendGroupMessage(
     success: boolean;
     message: GroupMessage;
   };
+
+}
+
+// ========================================
+// NOTIFICATIONS
+// ========================================
+
+export type YaariNotification = {
+  id: string;
+  user_id: string;
+  title: string;
+  message: string;
+  type: string;
+  related_trip_id: string | null;
+  related_request_id: string | null;
+  is_read: boolean;
+  created_at: string;
+};
+
+// Fetch notifications
+export async function getNotifications() {
+  const token = await getMessagingToken();
+
+  const response = await fetch(
+    `${API_URL}/api/notifications`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(result.message || "Failed to fetch notifications");
+  }
+
+  return result as {
+    success: boolean;
+    notifications: YaariNotification[];
+  };
+}
+
+// Fetch unread notification count
+export async function getUnreadNotificationCount() {
+  const token = await getMessagingToken();
+
+  const response = await fetch(
+    `${API_URL}/api/notifications/unread-count`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(result.message || "Failed to fetch unread count");
+  }
+
+  return result as {
+    success: boolean;
+    unreadCount: number;
+  };
+}
+
+// Mark one notification as read
+export async function markNotificationAsRead(
+  notificationId: string
+) {
+  const token = await getMessagingToken();
+
+  const response = await fetch(
+    `${API_URL}/api/notifications/${notificationId}/read`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(result.message || "Failed to update notification");
+  }
+
+  return result;
+}
+
+// Mark all notifications as read
+export async function markAllNotificationsAsRead() {
+  const token = await getMessagingToken();
+
+  const response = await fetch(
+    `${API_URL}/api/notifications/read-all`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(result.message || "Failed to update notifications");
+  }
+
+  return result;
 }

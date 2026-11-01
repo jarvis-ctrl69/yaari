@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import { pool } from "./db";
+import notificationRoutes from "./routes/notificationRoutes";
 import { setIO } from "./socket";
 
 import profileRoutes from "./routes/profileRoutes";
@@ -34,6 +35,7 @@ app.use("/api/trips", tripRoutes);
 app.use("/api/trip-requests", tripRequestRoutes);
 app.use("/api/groups", groupRoutes);
 app.use("/api/messages", messageRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 
 app.get("/api/health", (_req, res) => {

@@ -128,10 +128,51 @@ router.post("/", async (req, res) => {
       ]
     );
 
+    const newRequest = result.rows[0];
+
+    // Create notification for trip creator
+    // Notification failure will not undo a successfully created request.
+    try {
+      const requesterProfile = await pool.query(
+        `SELECT name FROM profiles WHERE id = $1`,
+        [requester_id]
+      );
+
+      const requesterName =
+        requesterProfile.rows[0]?.name || "A traveller";
+
+      await pool.query(
+        `
+        INSERT INTO notifications (
+          user_id,
+          title,
+          message,
+          type,
+          related_trip_id,
+          related_request_id
+        )
+        VALUES ($1, $2, $3, $4, $5, $6)
+        `,
+        [
+          trip.creator_id,
+          "New join request",
+          `${requesterName} wants to join your trip.`,
+          "join_request",
+          trip_id,
+          newRequest.id,
+        ]
+      );
+    } catch (notificationError) {
+      console.error(
+        "New join request notification error:",
+        notificationError
+      );
+    }
+
     return res.status(201).json({
       success: true,
       message: "Join request sent successfully",
-      request: result.rows[0],
+      request: newRequest,
     });
   } catch (error: any) {
     console.error("Create trip request error:", error);
@@ -293,6 +334,7 @@ router.patch("/:requestId", async (req, res) => {
       }
     }
 
+    // Update request status
     const result = await client.query(
       `
       UPDATE trip_requests
@@ -304,6 +346,7 @@ router.patch("/:requestId", async (req, res) => {
     );
 
     if (status === "accepted") {
+      // Create or retrieve trip group
       const groupResult = await client.query(
         `
         INSERT INTO trip_groups (trip_id)
@@ -346,8 +389,78 @@ router.patch("/:requestId", async (req, res) => {
         `,
         [group.id, request.requester_id]
       );
+
+      // Notify requester that their request was accepted
+      await client.query(
+        `
+        INSERT INTO notifications (
+          user_id,
+          title,
+          message,
+          type,
+          related_trip_id,
+          related_request_id
+        )
+        VALUES ($1, $2, $3, $4, $5, $6)
+        `,
+        [
+          request.requester_id,
+          "Request accepted",
+          "Your trip request has been accepted!",
+          "request_accepted",
+          request.trip_id,
+          request.id,
+        ]
+      );
+
+      // Notify requester that the group has been created
+      await client.query(
+        `
+        INSERT INTO notifications (
+          user_id,
+          title,
+          message,
+          type,
+          related_trip_id,
+          related_request_id
+        )
+        VALUES ($1, $2, $3, $4, $5, $6)
+        `,
+        [
+          request.requester_id,
+          "Trip group created",
+          "You're now part of a travel group. Start connecting with your group members!",
+          "group_created",
+          request.trip_id,
+          request.id,
+        ]
+      );
+    } else {
+      // Notify requester that their request was rejected
+      await client.query(
+        `
+        INSERT INTO notifications (
+          user_id,
+          title,
+          message,
+          type,
+          related_trip_id,
+          related_request_id
+        )
+        VALUES ($1, $2, $3, $4, $5, $6)
+        `,
+        [
+          request.requester_id,
+          "Request rejected",
+          "Your request to join this trip was not accepted.",
+          "request_rejected",
+          request.trip_id,
+          request.id,
+        ]
+      );
     }
 
+    // Save request, group and notifications together
     await client.query("COMMIT");
 
     return res.status(200).json({
