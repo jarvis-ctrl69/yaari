@@ -1,17 +1,24 @@
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   ScrollView,
   Text,
   View,
 } from "react-native";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 
 import Card from "@/components/Card";
 import Button from "@/components/Button";
+import SwipeAction from "@/components/SwipeAction";
+
 import { supabase } from "@/lib/supabase";
-import { getMyTrips } from "@/lib/api";
+import {
+  getMyTrips,
+  startTrip,
+  endTrip,
+} from "@/lib/api";
 
 type Trip = {
   id: string;
@@ -36,37 +43,99 @@ export default function MyTripsScreen() {
   const [createdTrips, setCreatedTrips] = useState<Trip[]>([]);
   const [joinedTrips, setJoinedTrips] = useState<Trip[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentUserId, setCurrentUserId] = useState("");
+  const [processingTripId, setProcessingTripId] = useState<string | null>(null);
 
-  useEffect(() => {
-    const loadMyTrips = async () => {
-      try {
-        const {
-          data: { user },
-          error,
-        } = await supabase.auth.getUser();
+  // LOAD TRIPS
+  const loadMyTrips = useCallback(async () => {
+    try {
+      const {
+        data: { user },
+        error,
+      } = await supabase.auth.getUser();
 
-        if (error || !user) {
-          console.log("Unable to get logged-in user");
-          return;
-        }
-
-        const data = await getMyTrips(user.id);
-
-        setCreatedTrips(data.createdTrips || []);
-        setJoinedTrips(data.joinedTrips || []);
-      } catch (error) {
-        console.error("Failed to load my trips:", error);
-      } finally {
-        setLoading(false);
+      if (error || !user) {
+        console.log("Unable to get logged-in user");
+        return;
       }
-    };
 
-    loadMyTrips();
+      setCurrentUserId(user.id);
+
+      const data = await getMyTrips(user.id);
+
+      setCreatedTrips(data.createdTrips || []);
+      setJoinedTrips(data.joinedTrips || []);
+    } catch (error) {
+      console.error("Failed to load my trips:", error);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  // Parse YYYY-MM-DD as a local date to avoid timezone shifts.
+  useEffect(() => {
+    loadMyTrips();
+  }, [loadMyTrips]);
+
+  // REFRESH WHEN USER RETURNS TO THIS TAB
+  useFocusEffect(
+    useCallback(() => {
+      loadMyTrips();
+    }, [loadMyTrips])
+  );
+
+  // START / END TRIP
+  const handleTripAction = async (
+    trip: Trip,
+    action: "start" | "end"
+  ) => {
+    if (!currentUserId || processingTripId) return;
+
+    try {
+      setProcessingTripId(trip.id);
+
+      if (action === "start") {
+        await startTrip(trip.id, currentUserId);
+      } else {
+        await endTrip(trip.id, currentUserId);
+      }
+
+      const newStatus =
+        action === "start" ? "in_progress" : "completed";
+
+      setCreatedTrips((previous) =>
+        previous.map((item) =>
+          item.id === trip.id
+            ? { ...item, status: newStatus }
+            : item
+        )
+      );
+
+      Alert.alert(
+        "Success",
+        action === "start"
+          ? "Your trip has started!"
+          : "Your trip has been completed!"
+      );
+    } catch (error: any) {
+      Alert.alert(
+        "Trip Update Failed",
+        error?.message || "Please try again."
+      );
+
+      // Reload in case the server updated but response failed.
+      await loadMyTrips();
+    } finally {
+      setProcessingTripId(null);
+    }
+  };
+
+  // DATE HELPERS
   const parseDate = (value: string) => {
-    const [year, month, day] = value.slice(0, 10).split("-").map(Number);
+    const [year, month, day] = value
+      .slice(0, 10)
+      .split("-")
+      .map(Number);
+
     return new Date(year, month - 1, day, 12, 0, 0, 0);
   };
 
@@ -86,7 +155,6 @@ export default function MyTripsScreen() {
     });
   };
 
-  // Inclusive duration: both start and end dates count.
   const getDuration = (start: string, end?: string | null) => {
     if (!start) return null;
 
@@ -140,6 +208,21 @@ export default function MyTripsScreen() {
     })}`;
   };
 
+  // STATUS LABEL
+  const formatStatus = (status: string) => {
+    switch (status) {
+      case "active":
+        return "Active";
+      case "in_progress":
+        return "In Progress";
+      case "completed":
+        return "Completed";
+      default:
+        return status || "Active";
+    }
+  };
+
+  // TRIP CARD
   const renderTripCard = (
     trip: Trip,
     type: "created" | "joined"
@@ -273,8 +356,16 @@ export default function MyTripsScreen() {
                 STATUS
               </Text>
 
-              <Text className="mt-1 font-bold text-gray-900">
-                {trip.status || "Active"}
+              <Text
+                className={`mt-1 font-bold ${
+                  trip.status === "completed"
+                    ? "text-green-700"
+                    : trip.status === "in_progress"
+                    ? "text-blue-700"
+                    : "text-gray-900"
+                }`}
+              >
+                {formatStatus(trip.status)}
               </Text>
             </View>
           </View>
@@ -316,11 +407,55 @@ export default function MyTripsScreen() {
               }
             />
           </View>
+
+          {/* CREATOR TRIP CONTROLS */}
+          {type === "created" && (
+            <View className="mt-2">
+              {trip.status === "active" && (
+                <SwipeAction
+                  title={
+                    processingTripId === trip.id
+                      ? "Starting..."
+                      : "Swipe to Start Trip  →"
+                  }
+                  color="#16A34A"
+                  disabled={processingTripId !== null}
+                  onComplete={() =>
+                    handleTripAction(trip, "start")
+                  }
+                />
+              )}
+
+              {trip.status === "in_progress" && (
+                <SwipeAction
+                  title={
+                    processingTripId === trip.id
+                      ? "Ending..."
+                      : "Swipe to End Trip  →"
+                  }
+                  color="#DC2626"
+                  disabled={processingTripId !== null}
+                  onComplete={() =>
+                    handleTripAction(trip, "end")
+                  }
+                />
+              )}
+
+              {trip.status === "completed" && (
+                <View className="mt-4 rounded-xl bg-green-50 p-4">
+                  <Text className="text-center font-bold text-green-700">
+                    ✓ Trip Completed
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
         </Card>
       </View>
     );
   };
 
+  // LOADING
   if (loading) {
     return (
       <View className="flex-1 items-center justify-center bg-gray-50">
@@ -340,7 +475,6 @@ export default function MyTripsScreen() {
       contentContainerStyle={{ paddingBottom: 40 }}
     >
       <View className="px-5 pb-10 pt-8">
-
         {/* HEADER */}
         <Text className="text-3xl font-bold text-gray-900">
           My Trips

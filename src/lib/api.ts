@@ -463,3 +463,40 @@ export async function markAllNotificationsAsRead() {
 
   return result;
 }
+//
+// ======================================== stard end 1
+export async function startTrip(tripId: string, creatorId: string) {
+  const response = await fetch(`${API_URL}/api/trips/${tripId}/start`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ creator_id: creatorId }),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.message || "Failed to start trip");
+  }
+
+  return data;
+}
+
+export async function endTrip(tripId: string, creatorId: string) {
+  const response = await fetch(`${API_URL}/api/trips/${tripId}/end`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ creator_id: creatorId }),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.message || "Failed to end trip");
+  }
+
+  return data;
+}

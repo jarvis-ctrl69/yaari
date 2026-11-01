@@ -1,9 +1,9 @@
+
 import { Router } from "express";
 import { pool } from "../db";
 
 const router = Router();
 
-// CREATE TRIP
 // CREATE TRIP
 router.post("/", async (req, res) => {
   try {
@@ -37,7 +37,6 @@ router.post("/", async (req, res) => {
       });
     }
 
-    // Validate date format
     const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 
     if (
@@ -50,7 +49,6 @@ router.post("/", async (req, res) => {
       });
     }
 
-    // Validate date order
     if (trip_end_date < trip_date) {
       return res.status(400).json({
         success: false,
@@ -58,7 +56,6 @@ router.post("/", async (req, res) => {
       });
     }
 
-    // Validate time format
     if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(departure_time)) {
       return res.status(400).json({
         success: false,
@@ -119,7 +116,6 @@ router.post("/", async (req, res) => {
       message: "Trip created successfully",
       trip: result.rows[0],
     });
-
   } catch (error) {
     console.error("Create trip error:", error);
 
@@ -163,39 +159,167 @@ router.get("/", async (_req, res) => {
   }
 });
 
-// id trip 
+// START TRIP
+router.patch("/:id/start", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { creator_id } = req.body;
+
+    if (!creator_id) {
+      return res.status(400).json({
+        success: false,
+        message: "Creator ID is required",
+      });
+    }
+
+    const result = await pool.query(
+      `
+      UPDATE trips
+      SET status = 'in_progress'
+      WHERE id = $1
+        AND creator_id = $2
+        AND status = 'active'
+      RETURNING *
+      `,
+      [id, creator_id]
+    );
+
+    if (result.rows.length === 0) {
+      const existing = await pool.query(
+        `SELECT creator_id, status FROM trips WHERE id = $1`,
+        [id]
+      );
+
+      if (existing.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Trip not found",
+        });
+      }
+
+      if (existing.rows[0].creator_id !== creator_id) {
+        return res.status(403).json({
+          success: false,
+          message: "Only the trip creator can start this trip",
+        });
+      }
+
+      return res.status(409).json({
+        success: false,
+        message: `Trip cannot be started. Current status: ${existing.rows[0].status}`,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Trip started successfully",
+      trip: result.rows[0],
+    });
+  } catch (error) {
+    console.error("Start trip error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to start trip",
+    });
+  }
+});
+
+// END TRIP
+router.patch("/:id/end", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { creator_id } = req.body;
+
+    if (!creator_id) {
+      return res.status(400).json({
+        success: false,
+        message: "Creator ID is required",
+      });
+    }
+
+    const result = await pool.query(
+      `
+      UPDATE trips
+      SET status = 'completed'
+      WHERE id = $1
+        AND creator_id = $2
+        AND status = 'in_progress'
+      RETURNING *
+      `,
+      [id, creator_id]
+    );
+
+    if (result.rows.length === 0) {
+      const existing = await pool.query(
+        `SELECT creator_id, status FROM trips WHERE id = $1`,
+        [id]
+      );
+
+      if (existing.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Trip not found",
+        });
+      }
+
+      if (existing.rows[0].creator_id !== creator_id) {
+        return res.status(403).json({
+          success: false,
+          message: "Only the trip creator can end this trip",
+        });
+      }
+
+      return res.status(409).json({
+        success: false,
+        message: `Trip cannot be ended. Current status: ${existing.rows[0].status}`,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Trip completed successfully",
+      trip: result.rows[0],
+    });
+  } catch (error) {
+    console.error("End trip error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to end trip",
+    });
+  }
+});
 
 // GET SINGLE TRIP
 router.get("/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
-   const result = await pool.query(
-  `
-  SELECT
-    trips.*,
-    profiles.name AS creator_name,
-    profiles.company,
-    profiles.job_role,
-    profiles.city,
-
-    (
-      trips.available_seats -
-      (
-        SELECT COUNT(*)
-        FROM trip_requests
-        WHERE trip_requests.trip_id = trips.id
-          AND trip_requests.status = 'accepted'
-      )
-    ) AS seats_left
-
-  FROM trips
-  JOIN profiles
-    ON trips.creator_id = profiles.id
-  WHERE trips.id = $1
-  `,
-  [id]
-);
+    const result = await pool.query(
+      `
+      SELECT
+        trips.*,
+        profiles.name AS creator_name,
+        profiles.company,
+        profiles.job_role,
+        profiles.city,
+        (
+          trips.available_seats -
+          (
+            SELECT COUNT(*)
+            FROM trip_requests
+            WHERE trip_requests.trip_id = trips.id
+              AND trip_requests.status = 'accepted'
+          )
+        ) AS seats_left
+      FROM trips
+      JOIN profiles
+        ON trips.creator_id = profiles.id
+      WHERE trips.id = $1
+      `,
+      [id]
+    );
 
     if (result.rows.length === 0) {
       return res.status(404).json({
@@ -223,7 +347,6 @@ router.get("/my/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
 
-    // Trips created by the user
     const createdTripsResult = await pool.query(
       `
       SELECT
@@ -241,8 +364,6 @@ router.get("/my/:userId", async (req, res) => {
       [userId]
     );
 
-    // Trips joined by the user
-    // Only accepted requests count as joined trips
     const joinedTripsResult = await pool.query(
       `
       SELECT
@@ -277,4 +398,5 @@ router.get("/my/:userId", async (req, res) => {
     });
   }
 });
+
 export default router;
