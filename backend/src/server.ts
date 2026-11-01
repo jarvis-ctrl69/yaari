@@ -12,6 +12,7 @@ import tripRoutes from "./routes/tripRoutes";
 import tripRequestRoutes from "./routes/tripRequestRoutes";
 import groupRoutes from "./routes/groupRoutes";
 import messageRoutes from "./routes/messageRoutes";
+import checkinRoutes from "./routes/checkinRoutes";
   
 dotenv.config();
 
@@ -36,7 +37,7 @@ app.use("/api/trip-requests", tripRequestRoutes);
 app.use("/api/groups", groupRoutes);
 app.use("/api/messages", messageRoutes);
 app.use("/api/notifications", notificationRoutes);
-
+app.use("/api/checkin", checkinRoutes);
 
 app.get("/api/health", (_req, res) => {
   res.json({

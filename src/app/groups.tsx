@@ -11,17 +11,24 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, router } from "expo-router";
+import QRCode from "react-native-qrcode-svg";
 
 import Card from "@/components/Card";
 import {
   getTripGroup,
   getGroupMessages,
   sendGroupMessage,
+  generateCheckinQR,
+  getTripAttendance,
   GroupMessage,
 } from "@/lib/api";
 import { connectSocket, disconnectSocket } from "@/lib/socket";
 import { supabase } from "@/lib/supabase";
+
+// ========================================
+// TYPES
+// ========================================
 
 type GroupMember = {
   id: string;
@@ -38,7 +45,23 @@ type Group = {
   id: string;
   trip_id: string;
   created_at: string;
+  creator_id: string;
+  trip_status: string;
 };
+
+type AttendanceItem = {
+  id: string;
+  user_id: string;
+  member_name: string;
+  latitude: number;
+  longitude: number;
+  distance_meters: number;
+  checked_in_at: string;
+};
+
+// ========================================
+// MAIN GROUP SCREEN
+// ========================================
 
 export default function GroupScreen() {
   const params = useLocalSearchParams<{
@@ -54,7 +77,10 @@ export default function GroupScreen() {
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
 
-  // Chat states
+  // ========================================
+  // CHAT STATES
+  // ========================================
+
   const [messages, setMessages] = useState<GroupMessage[]>([]);
   const [messageInput, setMessageInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
@@ -64,7 +90,31 @@ export default function GroupScreen() {
 
   const scrollViewRef = useRef<ScrollView>(null);
 
-  // Load group and members
+  // ========================================
+  // QR CHECK-IN STATES
+  // ========================================
+
+  const [qrPayload, setQrPayload] = useState("");
+  const [qrExpiry, setQrExpiry] = useState("");
+  const [qrLoading, setQrLoading] = useState(false);
+
+  // ========================================
+  // ATTENDANCE STATES
+  // ========================================
+
+  const [attendance, setAttendance] = useState<AttendanceItem[]>([]);
+  const [attendanceLoading, setAttendanceLoading] = useState(false);
+  const [attendanceError, setAttendanceError] = useState("");
+
+  const isCreator =
+    !!currentUserId &&
+    !!group?.creator_id &&
+    currentUserId === group.creator_id;
+
+  // ========================================
+  // LOAD GROUP AND MEMBERS
+  // ========================================
+
   useEffect(() => {
     let active = true;
 
@@ -93,7 +143,9 @@ export default function GroupScreen() {
           );
         }
       } finally {
-        if (active) setLoading(false);
+        if (active) {
+          setLoading(false);
+        }
       }
     };
 
@@ -104,7 +156,10 @@ export default function GroupScreen() {
     };
   }, [tripId]);
 
-  // Load current logged-in user
+  // ========================================
+  // LOAD CURRENT LOGGED-IN USER
+  // ========================================
+
   useEffect(() => {
     let active = true;
 
@@ -129,13 +184,18 @@ export default function GroupScreen() {
     };
   }, []);
 
-  // Load messages and establish real-time connection
+  // ========================================
+  // LOAD GROUP CHAT AND SOCKET CONNECTION
+  // ========================================
+
   useEffect(() => {
     if (!group?.id) return;
 
     let active = true;
-    let connectedSocket: Awaited<ReturnType<typeof connectSocket>> | null =
-      null;
+
+    let connectedSocket:
+      | Awaited<ReturnType<typeof connectSocket>>
+      | null = null;
 
     const handleNewMessage = (newMessage: GroupMessage) => {
       if (!active || newMessage.group_id !== group.id) return;
@@ -166,20 +226,21 @@ export default function GroupScreen() {
         // Connect to authenticated Socket.IO server
         const socket = await connectSocket();
 
-        if (!active) {
-          return;
-        }
+        if (!active) return;
 
         connectedSocket = socket;
 
         // Listen for incoming group messages
         socket.on("new_message", handleNewMessage);
 
-        // Join only after server verifies group membership
+        // Join after server verifies group membership
         socket.emit(
           "join_group",
           group.id,
-          (result: { success: boolean; message?: string }) => {
+          (result: {
+            success: boolean;
+            message?: string;
+          }) => {
             if (!active) return;
 
             if (!result.success) {
@@ -202,7 +263,9 @@ export default function GroupScreen() {
           );
         }
       } finally {
-        if (active) setChatLoading(false);
+        if (active) {
+          setChatLoading(false);
+        }
       }
     };
 
@@ -219,7 +282,114 @@ export default function GroupScreen() {
     };
   }, [group?.id]);
 
-  // Send a message
+  // ========================================
+  // LOAD ATTENDANCE
+  // ========================================
+
+  useEffect(() => {
+    if (!tripId || !group) return;
+
+    loadAttendance();
+  }, [tripId, group?.id]);
+
+  const loadAttendance = async () => {
+    if (!tripId) return;
+
+    try {
+      setAttendanceLoading(true);
+      setAttendanceError("");
+
+      const result = await getTripAttendance(tripId);
+
+      setAttendance(result.attendance || []);
+    } catch (error) {
+      console.error("Attendance loading error:", error);
+
+      setAttendanceError(
+        error instanceof Error
+          ? error.message
+          : "Unable to load attendance."
+      );
+    } finally {
+      setAttendanceLoading(false);
+    }
+  };
+
+  // ========================================
+  // GENERATE QR CODE - CREATOR ONLY
+  // ========================================
+
+  const handleGenerateQR = async () => {
+    if (!tripId || qrLoading) return;
+
+    if (!isCreator) {
+      Alert.alert(
+        "Permission Denied",
+        "Only the trip creator can generate the QR code."
+      );
+      return;
+    }
+
+    if (group?.trip_status !== "in_progress") {
+      Alert.alert(
+        "Trip Not Started",
+        "Start the trip before generating the check-in QR."
+      );
+      return;
+    }
+
+    try {
+      setQrLoading(true);
+
+      const result = await generateCheckinQR(tripId);
+
+      setQrPayload(JSON.stringify(result.qrPayload));
+      // console.log("QR TEST DATA:", JSON.stringify(result.qrPayload));//veri
+      setQrExpiry(result.expiresAt);
+
+      Alert.alert(
+        "QR Generated",
+        "Your trip check-in QR code is ready. Ask your group members to scan it."
+      );
+    } catch (error) {
+      console.error("QR generation error:", error);
+
+      Alert.alert(
+        "QR Generation Failed",
+        error instanceof Error
+          ? error.message
+          : "Unable to generate QR code."
+      );
+    } finally {
+      setQrLoading(false);
+    }
+  };
+
+  // ========================================
+  // OPEN QR SCANNER - MEMBERS
+  // ========================================
+
+  const handleOpenScanner = () => {
+    if (!tripId) return;
+
+    if (group?.trip_status !== "in_progress") {
+      Alert.alert(
+        "Trip Not Started",
+        "Check-in becomes available after the creator starts the trip."
+      );
+      return;
+    }
+
+    router.push({
+      pathname: "/checkin/qr",
+      params: { tripId },
+    });
+  };
+
+  // ========================================
+  // SEND GROUP MESSAGE
+  // ========================================
+
   const handleSendMessage = async () => {
     const trimmedMessage = messageInput.trim();
 
@@ -245,7 +415,6 @@ export default function GroupScreen() {
       );
 
       if (result.success && result.message) {
-        // Avoid duplicate messages if Socket.IO already delivered it
         setMessages((previousMessages) => {
           const alreadyExists = previousMessages.some(
             (item) => item.id === result.message.id
@@ -272,12 +441,20 @@ export default function GroupScreen() {
     }
   };
 
+  // ========================================
+  // FORMAT TIME
+  // ========================================
+
   const formatTime = (date: string) => {
     return new Date(date).toLocaleTimeString([], {
       hour: "2-digit",
       minute: "2-digit",
     });
   };
+
+  // ========================================
+  // LOADING SCREEN
+  // ========================================
 
   if (loading) {
     return (
@@ -290,6 +467,10 @@ export default function GroupScreen() {
       </View>
     );
   }
+
+  // ========================================
+  // ERROR SCREEN
+  // ========================================
 
   if (errorMessage) {
     return (
@@ -309,6 +490,10 @@ export default function GroupScreen() {
     );
   }
 
+  // ========================================
+  // GROUP NOT FOUND
+  // ========================================
+
   if (!group) {
     return (
       <View className="flex-1 items-center justify-center bg-gray-50 px-6">
@@ -326,6 +511,10 @@ export default function GroupScreen() {
       </View>
     );
   }
+
+  // ========================================
+  // MAIN UI
+  // ========================================
 
   return (
     <KeyboardAvoidingView
@@ -369,10 +558,16 @@ export default function GroupScreen() {
               <Text className="mt-2 text-sm text-gray-500">
                 Group created successfully for this trip.
               </Text>
+
+              <View className="mt-3 self-start rounded-full bg-blue-50 px-3 py-2">
+                <Text className="text-xs font-bold capitalize text-blue-700">
+                  Trip status: {group.trip_status?.replace("_", " ")}
+                </Text>
+              </View>
             </Card>
           </View>
 
-          {/* MEMBERS */}
+          {/* GROUP MEMBERS */}
           <View className="mt-6">
             <Text className="mb-4 text-xl font-bold text-gray-900">
               Group Members
@@ -382,7 +577,6 @@ export default function GroupScreen() {
               <View key={member.id} className="mb-4">
                 <Card>
                   <View className="flex-row items-center">
-
                     <View className="h-14 w-14 items-center justify-center rounded-full bg-blue-100">
                       <Text className="text-xl font-bold text-blue-600">
                         {member.name?.charAt(0).toUpperCase() || "Y"}
@@ -424,7 +618,175 @@ export default function GroupScreen() {
             ))}
           </View>
 
+          {/* ================================== */}
+          {/* QR + GPS CHECK-IN */}
+          {/* ================================== */}
+
+          <View className="mt-6">
+            <Text className="mb-4 text-xl font-bold text-gray-900">
+              Trip Check-in
+            </Text>
+
+            <Card>
+              <Text className="text-base font-bold text-gray-900">
+                QR + GPS Attendance
+              </Text>
+
+              <Text className="mt-2 text-sm text-gray-500">
+                Scan the trip creator's QR code to record your
+                attendance. GPS verifies that you are within
+                100 metres of the pickup point.
+              </Text>
+
+              {/* TRIP NOT STARTED */}
+              {group.trip_status !== "in_progress" ? (
+                <View className="mt-4 rounded-xl bg-yellow-50 p-4">
+                  <Text className="text-sm font-semibold text-yellow-800">
+                    Check-in is currently unavailable.
+                  </Text>
+
+                  <Text className="mt-1 text-sm text-yellow-700">
+                    The creator must start the trip before QR
+                    check-in becomes available.
+                  </Text>
+                </View>
+              ) : isCreator ? (
+                <>
+                  {/* CREATOR QR GENERATION */}
+                  <Pressable
+                    onPress={handleGenerateQR}
+                    disabled={qrLoading}
+                    className={`mt-5 items-center rounded-xl py-4 ${
+                      qrLoading ? "bg-blue-300" : "bg-blue-600"
+                    }`}
+                  >
+                    {qrLoading ? (
+                      <ActivityIndicator color="#FFFFFF" />
+                    ) : (
+                      <Text className="font-bold text-white">
+                        {qrPayload
+                          ? "Regenerate QR Code"
+                          : "Generate Check-in QR"}
+                      </Text>
+                    )}
+                  </Pressable>
+
+                  {/* QR CODE DISPLAY */}
+                  {qrPayload ? (
+                    <View className="mt-5 items-center rounded-xl bg-gray-50 p-4">
+                      <QRCode
+                        value={qrPayload}
+                        size={210}
+                        backgroundColor="white"
+                        color="black"
+                      />
+
+                      <Text className="mt-4 text-center text-base font-bold text-gray-900">
+                        Trip Check-in QR
+                      </Text>
+
+                      <Text className="mt-2 text-center text-sm text-gray-500">
+                        Ask your group members to scan this code.
+                      </Text>
+
+                      {qrExpiry ? (
+                        <Text className="mt-3 text-center text-xs text-gray-500">
+                          Expires:{" "}
+                          {new Date(qrExpiry).toLocaleString()}
+                        </Text>
+                      ) : null}
+
+                      <Text className="mt-2 text-center text-xs text-green-700">
+                        QR code generated successfully.
+                      </Text>
+                    </View>
+                  ) : null}
+                </>
+              ) : (
+                /* MEMBER SCANNER BUTTON */
+                <Pressable
+                  onPress={handleOpenScanner}
+                  className="mt-5 items-center rounded-xl bg-blue-600 py-4"
+                >
+                  <Text className="font-bold text-white">
+                    Scan QR & Check In
+                  </Text>
+                </Pressable>
+              )}
+
+              {/* ATTENDANCE */}
+              <View className="mt-6 border-t border-gray-100 pt-5">
+                <View className="flex-row items-center justify-between">
+                  <Text className="text-base font-bold text-gray-900">
+                    Attendance
+                  </Text>
+
+                  <Pressable
+                    onPress={loadAttendance}
+                    disabled={attendanceLoading}
+                  >
+                    <Text className="font-semibold text-blue-600">
+                      {attendanceLoading ? "Loading..." : "Refresh"}
+                    </Text>
+                  </Pressable>
+                </View>
+
+                {attendanceLoading ? (
+                  <View className="items-center py-5">
+                    <ActivityIndicator />
+                    <Text className="mt-2 text-sm text-gray-500">
+                      Loading attendance...
+                    </Text>
+                  </View>
+                ) : attendanceError ? (
+                  <View className="mt-3 rounded-xl bg-red-50 p-3">
+                    <Text className="text-sm text-red-600">
+                      {attendanceError}
+                    </Text>
+                  </View>
+                ) : attendance.length === 0 ? (
+                  <Text className="mt-3 text-sm text-gray-500">
+                    No members have checked in yet.
+                  </Text>
+                ) : (
+                  attendance.map((item) => (
+                    <View
+                      key={item.id}
+                      className="mt-4 flex-row items-center justify-between"
+                    >
+                      <View className="flex-1">
+                        <Text className="font-semibold text-gray-900">
+                          {item.member_name}
+                        </Text>
+
+                        <Text className="mt-1 text-xs text-gray-500">
+                          {new Date(
+                            item.checked_in_at
+                          ).toLocaleString()}
+                        </Text>
+
+                        <Text className="mt-1 text-xs text-gray-500">
+                          {Math.round(item.distance_meters)} metres
+                          from pickup
+                        </Text>
+                      </View>
+
+                      <View className="rounded-full bg-green-50 px-3 py-2">
+                        <Text className="text-xs font-bold text-green-700">
+                          Checked in
+                        </Text>
+                      </View>
+                    </View>
+                  ))
+                )}
+              </View>
+            </Card>
+          </View>
+
+          {/* ================================== */}
           {/* GROUP CHAT */}
+          {/* ================================== */}
+
           <View className="mt-6">
             <View className="mb-4 flex-row items-center justify-between">
               <Text className="text-xl font-bold text-gray-900">
@@ -433,6 +795,7 @@ export default function GroupScreen() {
 
               <View className="flex-row items-center">
                 <View className="mr-2 h-2 w-2 rounded-full bg-green-500" />
+
                 <Text className="text-sm text-gray-500">
                   Live chat
                 </Text>
@@ -440,7 +803,6 @@ export default function GroupScreen() {
             </View>
 
             <View className="rounded-2xl bg-white p-4">
-
               {chatLoading ? (
                 <View className="items-center py-8">
                   <ActivityIndicator size="large" />
@@ -526,14 +888,12 @@ export default function GroupScreen() {
               )}
             </View>
           </View>
-
         </View>
       </ScrollView>
 
       {/* MESSAGE INPUT */}
       <View className="border-t border-gray-200 bg-white px-4 py-3">
         <View className="flex-row items-center">
-
           <TextInput
             className="mr-3 min-h-12 flex-1 rounded-full bg-gray-100 px-5 text-base text-gray-900"
             placeholder="Type a message..."
@@ -566,7 +926,6 @@ export default function GroupScreen() {
               </Text>
             )}
           </Pressable>
-
         </View>
 
         <Text className="mt-1 text-right text-xs text-gray-400">

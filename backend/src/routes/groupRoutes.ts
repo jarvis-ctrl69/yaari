@@ -4,6 +4,8 @@ import { pool } from "../db";
 const router = Router();
 
 // GET GROUP FOR A TRIP
+
+// GET GROUP FOR A TRIP
 router.get("/trip/:tripId", async (req, res) => {
   try {
     const { tripId } = req.params;
@@ -13,8 +15,11 @@ router.get("/trip/:tripId", async (req, res) => {
       SELECT
         tg.id,
         tg.trip_id,
-        tg.created_at
+        tg.created_at,
+        t.creator_id,
+        t.status AS trip_status
       FROM trip_groups tg
+      JOIN trips t ON t.id = tg.trip_id
       WHERE tg.trip_id = $1
       `,
       [tripId]
@@ -68,6 +73,7 @@ router.get("/trip/:tripId", async (req, res) => {
     });
   }
 });
+
 
 // CREATE GROUP FOR A TRIP
 router.post("/", async (req, res) => {

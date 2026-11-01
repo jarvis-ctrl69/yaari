@@ -72,8 +72,10 @@ type CreateTripData = {
   creator_id: string;
   from_location: string;
   to_location: string;
+  pickup_latitude: number;
+  pickup_longitude: number;
   trip_date: string;
-  trip_end_date: string; // NEW: Trip end date
+  trip_end_date: string;
   departure_time: string;
   available_seats: number;
   trip_cost: number;
@@ -287,7 +289,9 @@ async function getMessagingToken(): Promise<string> {
   if (error || !session?.access_token) {
     throw new Error("Please log in again to use group messaging");
   }
-
+  // console.log("SUPABASE TOKEN:", session.access_token); //veri
+console.log("CURRENT USER ID:", session.user.id);
+// console.log("CURRENT USER TOKEN:", session.access_token); //veri
   return session.access_token;
 }
 
@@ -499,4 +503,108 @@ export async function endTrip(tripId: string, creatorId: string) {
   }
 
   return data;
+}
+// ========================================
+// QR + GPS CHECK-IN
+// ========================================
+
+export type CheckinQRPayload = {
+  tripId: string;
+  token: string;
+};
+
+export async function generateCheckinQR(tripId: string) {
+  const token = await getMessagingToken();
+
+  const response = await fetch(
+    `${API_URL}/api/checkin/${tripId}/generate`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    }
+  );
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(result.message || "Failed to generate QR code");
+  }
+
+  return result as {
+    success: boolean;
+    message: string;
+    qrPayload: CheckinQRPayload;
+    expiresAt: string;
+  };
+}
+
+export async function verifyCheckin(
+  tripId: string,
+  qrToken: string,
+  latitude: number,
+  longitude: number
+) {
+  const token = await getMessagingToken();
+
+  const response = await fetch(
+    `${API_URL}/api/checkin/verify`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        tripId,
+        token: qrToken,
+        latitude,
+        longitude,
+      }),
+    }
+  );
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(result.message || "GPS check-in failed");
+  }
+
+  return result;
+}
+
+
+export async function getTripAttendance(tripId: string) {
+  const token = await getMessagingToken();
+
+  const response = await fetch(
+    `${API_URL}/api/checkin/${tripId}/attendance`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+
+  const responseText = await response.text();
+
+  let result;
+
+  try {
+    result = JSON.parse(responseText);
+  } catch {
+    console.error("Attendance API returned non-JSON:", responseText);
+
+    throw new Error(
+      `Attendance API error (${response.status}). Check backend route registration.`
+    );
+  }
+
+  if (!response.ok) {
+    throw new Error(result.message || "Failed to fetch attendance");
+  }
+
+  return result;
 }

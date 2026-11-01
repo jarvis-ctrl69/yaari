@@ -732,6 +732,8 @@ export default function CreateTripScreen() {
         creator_id: user.id,
         from_location: fromLocation.trim(),
         to_location: toLocation.trim(),
+        pickup_latitude: fromCoords.latitude,
+        pickup_longitude: fromCoords.longitude,
         trip_date: tripDate,
         trip_end_date: tripEndDate,
         departure_time: departureTime,

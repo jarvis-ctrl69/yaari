@@ -11,6 +11,8 @@ router.post("/", async (req, res) => {
       creator_id,
       from_location,
       to_location,
+      pickup_latitude,
+      pickup_longitude,
       trip_date,
       trip_end_date,
       departure_time,
@@ -34,6 +36,28 @@ router.post("/", async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Required trip fields are missing",
+      });
+    }
+
+    // Validate pickup coordinates
+    const latitude = Number(pickup_latitude);
+    const longitude = Number(pickup_longitude);
+
+    if (
+      pickup_latitude === undefined ||
+      pickup_longitude === undefined ||
+      pickup_latitude === null ||
+      pickup_longitude === null ||
+      !Number.isFinite(latitude) ||
+      !Number.isFinite(longitude) ||
+      latitude < -90 ||
+      latitude > 90 ||
+      longitude < -180 ||
+      longitude > 180
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid pickup coordinates are required",
       });
     }
 
@@ -86,6 +110,8 @@ router.post("/", async (req, res) => {
         creator_id,
         from_location,
         to_location,
+        pickup_latitude,
+        pickup_longitude,
         trip_date,
         trip_end_date,
         departure_time,
@@ -94,13 +120,18 @@ router.post("/", async (req, res) => {
         travel_type,
         description
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      VALUES (
+        $1, $2, $3, $4, $5, $6,
+        $7, $8, $9, $10, $11, $12
+      )
       RETURNING *
       `,
       [
         creator_id,
         from_location,
         to_location,
+        latitude,
+        longitude,
         trip_date,
         trip_end_date,
         departure_time,
