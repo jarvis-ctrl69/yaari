@@ -160,6 +160,18 @@ const createDestination = (): Destination => ({
   coordinates: null,
 });
 
+// Automatically formats Indian registration input as KA 03 CA 2135.
+const formatIndianVehicleNumber = (value: string) => {
+  const raw = value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const state = raw.slice(0, 2).replace(/[^A-Z]/g, "");
+  const remainder = raw.slice(state.length);
+  const rto = remainder.slice(0, 2).replace(/[^0-9]/g, "");
+  const afterRto = remainder.slice(2);
+  const series = afterRto.slice(0, 3).replace(/[^A-Z]/g, "");
+  const vehicleDigits = afterRto.slice(series.length).replace(/[^0-9]/g, "").slice(0, 4);
+  return [state, rto, series, vehicleDigits].filter(Boolean).join(" ");
+};
+
 export default function CreateTripScreen() {
   const mapRef = useRef<WebView>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
@@ -230,6 +242,27 @@ export default function CreateTripScreen() {
   const [loading, setLoading] = useState(false);
 
   const isPersonalVehicle = ["Car", "Bike", "Other"].includes(travelType);
+
+  const MINIMUM_TRIP_DISTANCE = 50000;
+
+  const normalizedVehicleNumber = vehicleNumber
+    .toUpperCase()
+    .trim()
+    .replace(/\s+/g, " ");
+
+  const indianRegistrationPattern =
+    /^[A-Z]{2} \d{2} [A-Z]{1,3} \d{1,4}$/;
+
+  const isVehicleNumberValid =
+    indianRegistrationPattern.test(normalizedVehicleNumber);
+
+  const isDistanceInvalid =
+    routeDistance !== null && routeDistance < MINIMUM_TRIP_DISTANCE;
+
+  const isVehicleNumberInvalid =
+    isPersonalVehicle &&
+    vehicleNumber.trim().length > 0 &&
+    !isVehicleNumberValid;
 
   const selectedDestination = (id: string) =>
     destinations.find((destination) => destination.id === id);
@@ -706,6 +739,13 @@ export default function CreateTripScreen() {
       );
       return;
     }
+    if (isDistanceInvalid) {
+      Alert.alert(
+        "Minimum distance required",
+        `YAARI requires a minimum road distance of 50 km. Your current route is ${formatDistance(routeDistance)}. Please add or change destinations.`
+      );
+      return;
+    }
 
     if (!tripDate || !tripEndDate || !departureTime) {
       Alert.alert(
@@ -742,6 +782,14 @@ export default function CreateTripScreen() {
       Alert.alert(
         "Vehicle details required",
         "Please enter both the vehicle name and registration number."
+      );
+      return;
+    }
+
+    if (isPersonalVehicle && !isVehicleNumberValid) {
+      Alert.alert(
+        "Invalid vehicle number",
+        "Please enter your vehicle registration in the format KA 03 CA 2135."
       );
       return;
     }
@@ -1160,6 +1208,18 @@ export default function CreateTripScreen() {
               </View>
             </View>
           )}
+
+          {isDistanceInvalid && !routeLoading && (
+            <View className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3">
+              <Text className="font-bold text-red-700">
+                ⚠ Minimum distance not met
+              </Text>
+              <Text className="mt-1 text-sm text-red-600">
+                YAARI requires at least 50 km. Your current route is{" "}
+                {formatDistance(routeDistance!)}. Please add or change destinations.
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* DATES */}
@@ -1330,12 +1390,28 @@ export default function CreateTripScreen() {
             </Text>
             <TextInput
               value={vehicleNumber}
-              onChangeText={setVehicleNumber}
-              placeholder="e.g. KA 03 AB 1234"
+              onChangeText={(value) =>
+                setVehicleNumber(formatIndianVehicleNumber(value))
+              }
+              placeholder="e.g. KA 03 CA 2135"
               autoCapitalize="characters"
+              autoCorrect={false}
+              maxLength={13}
               placeholderTextColor="#9CA3AF"
-              className="rounded-2xl border border-gray-200 bg-white px-4 py-4 text-base text-gray-900"
+              className={`rounded-2xl border bg-white px-4 py-4 text-base text-gray-900 ${
+                isVehicleNumberInvalid ? "border-red-400" : "border-gray-200"
+              }`}
             />
+            {isVehicleNumberInvalid ? (
+              <Text className="mt-2 text-sm font-medium text-red-600">
+                ⚠ Invalid registration number. Use format: KA 03 CA 2135.
+              </Text>
+            ) : (
+              <Text className="mt-2 text-xs text-gray-500">
+                Enter state code, RTO code, series and vehicle number.
+                Example: KA 03 CA 2135.
+              </Text>
+            )}
           </View>
         )}
 
@@ -1357,9 +1433,11 @@ export default function CreateTripScreen() {
         {/* CREATE */}
         <Pressable
           onPress={handleCreateTrip}
-          disabled={loading}
+          disabled={loading || isDistanceInvalid || isVehicleNumberInvalid}
           className={`mt-8 items-center rounded-2xl px-6 py-4 ${
-            loading ? "bg-blue-300" : "bg-blue-600"
+            loading || isDistanceInvalid || isVehicleNumberInvalid
+              ? "bg-blue-300"
+              : "bg-blue-600"
           }`}
         >
           {loading ? (

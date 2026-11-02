@@ -223,20 +223,40 @@ router.post("/", async (req, res) => {
       finalDestination =
         normalizedDestinations[normalizedDestinations.length - 1].destination_name;
 
-      const personalVehicleTypes = ["car", "bike", "other", "other personal vehicle"];
-      if (personalVehicleTypes.includes(String(travel_type).trim().toLowerCase())) {
-        if (
-          typeof vehicle_name !== "string" ||
-          !vehicle_name.trim() ||
-          typeof vehicle_number !== "string" ||
-          !vehicle_number.trim()
-        ) {
-          return res.status(400).json({
-            success: false,
-            message: "Vehicle name and registration number are required for personal vehicles",
-          });
-        }
-      }
+      
+
+const personalVehicleTypes = ["car", "bike", "other", "other personal vehicle"];
+
+if (personalVehicleTypes.includes(String(travel_type).trim().toLowerCase())) {
+  if (
+    typeof vehicle_name !== "string" ||
+    !vehicle_name.trim() ||
+    typeof vehicle_number !== "string" ||
+    !vehicle_number.trim()
+  ) {
+    return res.status(400).json({
+      success: false,
+      message: "Vehicle name and registration number are required for personal vehicles",
+    });
+  }
+
+  // Validate Indian vehicle registration format: KA 03 CA 2135
+  const normalizedVehicleNumber = vehicle_number
+    .toUpperCase()
+    .trim()
+    .replace(/\s+/g, " ");
+
+  const indianRegistrationPattern =
+    /^[A-Z]{2} \d{2} [A-Z]{1,3} \d{1,4}$/;
+
+  if (!indianRegistrationPattern.test(normalizedVehicleNumber)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid vehicle registration number. Use the format: KA 03 CA 2135",
+    });
+  }
+}
+
 
       // Calculate every consecutive road segment before opening the DB transaction.
       // If routing fails, no trip or destination records are written.
@@ -245,11 +265,25 @@ router.post("/", async (req, res) => {
         normalizedDestinations
       );
 
-      const totalDistanceMeters = segmentDistancesMeters.reduce(
-        (sum, distance) => sum + distance,
-        0
-      );
-      totalDistanceKm = Number((totalDistanceMeters / 1000).toFixed(2));
+      
+const totalDistanceMeters = segmentDistancesMeters.reduce(
+  (sum, distance) => sum + distance,
+  0
+);
+
+// Minimum trip distance validation: 50 km
+if (totalDistanceMeters < 50000) {
+  return res.status(400).json({
+    success: false,
+    message: "Minimum trip distance must be 50 km",
+    total_distance_km: Number(
+      (totalDistanceMeters / 1000).toFixed(2)
+    ),
+  });
+}
+
+totalDistanceKm = Number((totalDistanceMeters / 1000).toFixed(2));
+
     } else if (!finalDestination) {
       // Backward compatibility for the currently installed app version.
       return res.status(400).json({
