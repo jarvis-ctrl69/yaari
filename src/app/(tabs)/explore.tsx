@@ -16,6 +16,16 @@ import { getTrips } from "@/lib/api";
 type Trip = {
   id: string;
   creator_id: string;
+  trip_name?: string | null;
+  total_distance_km?: string | number | null;
+  vehicle_name?: string | null;
+  vehicle_number?: string | null;
+  destinations?: {
+    id?: string;
+    destination_name: string;
+    sequence_order: number;
+    segment_distance_km?: string | number | null;
+  }[];
   from_location: string;
   to_location: string;
   trip_date: string;
@@ -192,6 +202,15 @@ export default function ExploreScreen() {
               <Card>
 
                 {/* CARD HEADER */}
+                <View className="mb-2">
+                  <Text className="text-xs font-bold tracking-wider text-slate-400">
+                    YAARI JOURNEY
+                  </Text>
+                  <Text className="mt-1 text-xl font-extrabold text-slate-900">
+                    {trip.trip_name || `${shortLocation(trip.from_location)} to ${shortLocation(trip.to_location)}`}
+                  </Text>
+                </View>
+
                 <View className="mb-5 flex-row items-center justify-between">
                   <Text className="text-xs font-bold tracking-wider text-slate-400">
                     YOUR NEXT JOURNEY
@@ -243,6 +262,55 @@ export default function ExploreScreen() {
                   </View>
                 </View>
 
+                {/* FULL ORDERED ITINERARY */}
+                {Array.isArray(trip.destinations) && trip.destinations.length > 0 ? (
+                  <View className="mt-4 rounded-xl bg-slate-50 p-4">
+                    <Text className="mb-3 text-xs font-bold tracking-wider text-slate-400">
+                      COMPLETE ITINERARY
+                    </Text>
+                    <View className="mb-3">
+                      <Text className="text-[11px] font-semibold text-slate-400">
+                        STARTING POINT
+                      </Text>
+                      <Text className="mt-1 text-sm font-bold text-slate-900">
+                        {shortLocation(trip.from_location)}
+                      </Text>
+                    </View>
+                    {[...trip.destinations]
+                      .sort((a, b) => a.sequence_order - b.sequence_order)
+                      .map((destination, index) => (
+                        <View
+                          key={destination.id || `${trip.id}-destination-${index}`}
+                          className="mb-3 border-l-2 border-blue-300 pl-3"
+                        >
+                          <Text className="text-[11px] font-semibold text-slate-400">
+                            DESTINATION {index + 1}
+                          </Text>
+                          <Text className="mt-1 text-sm font-bold text-slate-900">
+                            {destination.destination_name}
+                          </Text>
+                          {destination.segment_distance_km !== null &&
+                          destination.segment_distance_km !== undefined ? (
+                            <Text className="mt-1 text-xs font-medium text-blue-700">
+                              {Number(destination.segment_distance_km).toFixed(2)} km from previous stop
+                            </Text>
+                          ) : null}
+                        </View>
+                      ))}
+                    {trip.total_distance_km !== null &&
+                    trip.total_distance_km !== undefined ? (
+                      <View className="border-t border-slate-200 pt-3">
+                        <Text className="text-xs font-semibold text-slate-500">
+                          TOTAL ROAD DISTANCE
+                        </Text>
+                        <Text className="mt-1 text-xl font-extrabold text-blue-700">
+                          {Number(trip.total_distance_km).toFixed(2)} km
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                ) : null}
+
                 {/* DATE AND TIME */}
                 <View className="mt-5 flex-row rounded-xl bg-slate-50 p-3">
                   <View className="flex-1">
@@ -279,6 +347,20 @@ export default function ExploreScreen() {
                       👥 {trip.available_seats} seats
                     </Text>
                   </View>
+                  {trip.vehicle_name ? (
+                    <View className="rounded-full bg-slate-100 px-3 py-2">
+                      <Text className="text-xs font-semibold text-slate-700">
+                        {trip.vehicle_name}
+                      </Text>
+                    </View>
+                  ) : null}
+                  {trip.vehicle_number ? (
+                    <View className="rounded-full bg-slate-100 px-3 py-2">
+                      <Text className="text-xs font-semibold text-slate-700">
+                        {trip.vehicle_number}
+                      </Text>
+                    </View>
+                  ) : null}
                 </View>
 
                 {/* PRICE AND CREATOR */}

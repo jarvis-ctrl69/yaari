@@ -17,6 +17,7 @@ import QRCode from "react-native-qrcode-svg";
 import Card from "@/components/Card";
 import {
   getTripGroup,
+  getTrip,
   getGroupMessages,
   sendGroupMessage,
   generateCheckinQR,
@@ -59,6 +60,32 @@ type AttendanceItem = {
   checked_in_at: string;
 };
 
+type TripDestination = {
+  id?: string;
+  destination_name: string;
+  latitude?: number;
+  longitude?: number;
+  sequence_order?: number;
+  segment_distance_km?: number | string | null;
+};
+
+type TripDetails = {
+  id: string;
+  trip_name?: string | null;
+  from_location: string;
+  to_location: string;
+  destinations?: TripDestination[] | null;
+  total_distance_km?: number | string | null;
+  vehicle_name?: string | null;
+  vehicle_number?: string | null;
+  travel_type?: string;
+  trip_date?: string;
+  trip_end_date?: string | null;
+  departure_time?: string;
+  trip_cost?: string | number;
+  creator_name?: string;
+};
+
 // ========================================
 // MAIN GROUP SCREEN
 // ========================================
@@ -73,6 +100,7 @@ export default function GroupScreen() {
     : params.tripId;
 
   const [group, setGroup] = useState<Group | null>(null);
+  const [tripDetails, setTripDetails] = useState<TripDetails | null>(null);
   const [members, setMembers] = useState<GroupMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
@@ -132,6 +160,16 @@ export default function GroupScreen() {
 
         setGroup(data.group);
         setMembers(data.members || []);
+
+        // Load the parent trip so the group can display its fixed itinerary.
+        try {
+          const tripData = await getTrip(tripId);
+          if (active) {
+            setTripDetails(tripData);
+          }
+        } catch (tripError) {
+          console.error("Failed to load trip details for group:", tripError);
+        }
       } catch (error) {
         console.error("Failed to load group:", error);
 
@@ -566,6 +604,113 @@ export default function GroupScreen() {
               </View>
             </Card>
           </View>
+
+          {/* TRIP ITINERARY AND VEHICLE DETAILS */}
+          {tripDetails ? (
+            <View className="mt-5">
+              <Card>
+                {tripDetails.trip_name ? (
+                  <Text className="text-xl font-extrabold text-gray-900">
+                    {tripDetails.trip_name}
+                  </Text>
+                ) : null}
+
+                <Text className="mt-2 text-xs font-bold tracking-wider text-gray-500">
+                  COMPLETE ITINERARY
+                </Text>
+
+                <View className="mt-4">
+                  <Text className="text-xs font-semibold text-gray-400">
+                    STARTING POINT
+                  </Text>
+                  <Text className="mt-1 text-base font-bold text-gray-900">
+                    {tripDetails.from_location}
+                  </Text>
+                </View>
+
+                {tripDetails.destinations &&
+                tripDetails.destinations.length > 0 ? (
+                  tripDetails.destinations
+                    .slice()
+                    .sort(
+                      (a, b) =>
+                        (a.sequence_order ?? 0) - (b.sequence_order ?? 0)
+                    )
+                    .map((destination, index) => (
+                      <View
+                        key={
+                          destination.id ||
+                          `${tripDetails.id}-group-destination-${index}`
+                        }
+                        className="mt-3 border-l-2 border-blue-400 pl-3"
+                      >
+                        <Text className="text-xs font-semibold text-gray-400">
+                          DESTINATION {index + 1}
+                        </Text>
+                        <Text className="mt-1 text-base font-bold text-gray-900">
+                          {destination.destination_name}
+                        </Text>
+                        {destination.segment_distance_km !== null &&
+                        destination.segment_distance_km !== undefined ? (
+                          <Text className="mt-1 text-xs font-medium text-blue-700">
+                            {Number(destination.segment_distance_km).toFixed(2)} km from previous stop
+                          </Text>
+                        ) : null}
+                      </View>
+                    ))
+                ) : (
+                  <View className="mt-3">
+                    <Text className="text-xs font-semibold text-gray-400">
+                      DESTINATION
+                    </Text>
+                    <Text className="mt-1 text-base font-bold text-gray-900">
+                      {tripDetails.to_location}
+                    </Text>
+                  </View>
+                )}
+
+                {tripDetails.total_distance_km !== null &&
+                tripDetails.total_distance_km !== undefined ? (
+                  <View className="mt-4 border-t border-gray-100 pt-3">
+                    <Text className="text-xs font-semibold text-gray-500">
+                      TOTAL ROAD DISTANCE
+                    </Text>
+                    <Text className="mt-1 text-xl font-extrabold text-blue-700">
+                      {Number(tripDetails.total_distance_km).toFixed(2)} km
+                    </Text>
+                  </View>
+                ) : null}
+
+                {(tripDetails.travel_type ||
+                  tripDetails.vehicle_name ||
+                  tripDetails.vehicle_number) ? (
+                  <View className="mt-4 flex-row flex-wrap gap-2 border-t border-gray-100 pt-3">
+                    {tripDetails.travel_type ? (
+                      <View className="rounded-full bg-blue-50 px-3 py-2">
+                        <Text className="text-xs font-semibold text-blue-700">
+                          {tripDetails.travel_type}
+                        </Text>
+                      </View>
+                    ) : null}
+                    {tripDetails.vehicle_name ? (
+                      <View className="rounded-full bg-gray-100 px-3 py-2">
+                        <Text className="text-xs font-semibold text-gray-700">
+                          {tripDetails.vehicle_name}
+                        </Text>
+                      </View>
+                    ) : null}
+                    {tripDetails.vehicle_number ? (
+                      <View className="rounded-full bg-gray-100 px-3 py-2">
+                        <Text className="text-xs font-semibold text-gray-700">
+                          {tripDetails.vehicle_number}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                ) : null}
+              </Card>
+            </View>
+          ) : null}
 
           {/* GROUP MEMBERS */}
           <View className="mt-6">

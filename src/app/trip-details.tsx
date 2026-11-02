@@ -15,11 +15,25 @@ import Button from "@/components/Button";
 import { getTrip, requestToJoinTrip } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 
+type TripDestination = {
+  id?: string;
+  destination_name: string;
+  latitude?: number;
+  longitude?: number;
+  sequence_order?: number;
+  segment_distance_km?: number | string | null;
+};
+
 type Trip = {
   id: string;
   creator_id: string;
+  trip_name?: string | null;
   from_location: string;
   to_location: string;
+  destinations?: TripDestination[] | null;
+  total_distance_km?: number | string | null;
+  vehicle_name?: string | null;
+  vehicle_number?: string | null;
   trip_date: string;
   trip_end_date?: string | null;
   departure_time: string;
@@ -302,36 +316,78 @@ export default function TripDetailsScreen() {
           Review the journey before requesting to join.
         </Text>
 
-        {/* ROUTE */}
+        {/* ROUTE AND COMPLETE ITINERARY */}
         <View className="mt-6">
           <Card>
+            {trip.trip_name ? (
+              <Text className="mb-2 text-xl font-extrabold text-gray-900">
+                {trip.trip_name}
+              </Text>
+            ) : null}
+
             <Text className="text-xs font-bold text-gray-500">
-              JOURNEY ROUTE
+              COMPLETE ITINERARY
             </Text>
 
-            <View className="mt-5 flex-row">
-              <View className="mr-4 items-center">
-                <View className="h-3 w-3 rounded-full bg-green-600" />
-                <View className="my-1 h-12 w-0.5 bg-gray-300" />
-                <View className="h-3 w-3 rounded-full bg-red-500" />
+            <View className="mt-4">
+              <Text className="text-xs font-semibold text-gray-400">
+                STARTING POINT
+              </Text>
+              <Text className="mt-1 text-base font-bold text-gray-900">
+                {trip.from_location}
+              </Text>
+            </View>
+
+            {trip.destinations && trip.destinations.length > 0 ? (
+              <View className="mt-3">
+                {trip.destinations
+                  .slice()
+                  .sort(
+                    (a, b) =>
+                      (a.sequence_order ?? 0) - (b.sequence_order ?? 0)
+                  )
+                  .map((destination, index) => (
+                    <View
+                      key={destination.id || `${trip.id}-destination-${index}`}
+                      className="mt-3 border-l-2 border-blue-400 pl-3"
+                    >
+                      <Text className="text-xs font-semibold text-gray-400">
+                        DESTINATION {index + 1}
+                      </Text>
+                      <Text className="mt-1 text-base font-bold text-gray-900">
+                        {destination.destination_name}
+                      </Text>
+                      {destination.segment_distance_km !== null &&
+                      destination.segment_distance_km !== undefined ? (
+                        <Text className="mt-1 text-xs font-medium text-blue-700">
+                          {Number(destination.segment_distance_km).toFixed(2)} km from previous stop
+                        </Text>
+                      ) : null}
+                    </View>
+                  ))}
               </View>
-
-              <View className="flex-1">
-                <Text className="text-base font-bold text-gray-900">
-                  {trip.from_location}
+            ) : (
+              <View className="mt-3">
+                <Text className="text-xs font-semibold text-gray-400">
+                  DESTINATION
                 </Text>
-
-                <View className="h-12 justify-center">
-                  <Text className="text-xs text-gray-400">
-                    DESTINATION
-                  </Text>
-                </View>
-
-                <Text className="text-base font-bold text-gray-900">
+                <Text className="mt-1 text-base font-bold text-gray-900">
                   {trip.to_location}
                 </Text>
               </View>
-            </View>
+            )}
+
+            {trip.total_distance_km !== null &&
+            trip.total_distance_km !== undefined ? (
+              <View className="mt-4 border-t border-gray-100 pt-3">
+                <Text className="text-xs font-semibold text-gray-500">
+                  TOTAL ROAD DISTANCE
+                </Text>
+                <Text className="mt-1 text-xl font-extrabold text-blue-700">
+                  {Number(trip.total_distance_km).toFixed(2)} km
+                </Text>
+              </View>
+            ) : null}
           </Card>
         </View>
 
@@ -395,6 +451,8 @@ export default function TripDetailsScreen() {
                 ["Cost per person", formatCost(trip.trip_cost)],
                 ["Seats offered", String(trip.available_seats)],
                 ["Seats remaining", String(seatsLeft)],
+                ...(trip.vehicle_name ? [["Vehicle", trip.vehicle_name]] : []),
+                ...(trip.vehicle_number ? [["Vehicle number", trip.vehicle_number]] : []),
               ].map(([label, value]) => (
                 <View key={label} className="w-1/2 py-3">
                   <Text className="text-sm text-gray-500">{label}</Text>

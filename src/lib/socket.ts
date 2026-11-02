@@ -2,7 +2,8 @@
 import { io, Socket } from "socket.io-client";
 import { supabase } from "./supabase";
 
-const SOCKET_URL = "http://192.168.31.159:3000";
+const SOCKET_URL = "http://192.168.31.159:3000"; //Home
+// const SOCKET_URL = "http://10.84.190.96:3000"; //amogh
 
 let socket: Socket | null = null;
 

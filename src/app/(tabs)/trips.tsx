@@ -20,11 +20,25 @@ import {
   endTrip,
 } from "@/lib/api";
 
+type TripDestination = {
+  id?: string;
+  destination_name: string;
+  latitude?: number;
+  longitude?: number;
+  sequence_order?: number;
+  segment_distance_km?: number | string | null;
+};
+
 type Trip = {
   id: string;
   creator_id: string;
+  trip_name?: string | null;
   from_location: string;
   to_location: string;
+  destinations?: TripDestination[] | null;
+  total_distance_km?: number | string | null;
+  vehicle_name?: string | null;
+  vehicle_number?: string | null;
   trip_date: string;
   trip_end_date?: string | null;
   departure_time: string;
@@ -235,6 +249,12 @@ export default function MyTripsScreen() {
     return (
       <View key={trip.id} className="mb-5">
         <Card>
+          {trip.trip_name ? (
+            <Text className="mb-2 text-xl font-extrabold text-gray-900">
+              {trip.trip_name}
+            </Text>
+          ) : null}
+
           {/* ROUTE */}
           <Text className="mb-3 text-xs font-bold tracking-wider text-gray-500">
             JOURNEY ROUTE
@@ -263,6 +283,62 @@ export default function MyTripsScreen() {
               </Text>
             </View>
           </View>
+
+          {/* COMPLETE MULTI-DESTINATION ITINERARY */}
+          {trip.destinations && trip.destinations.length > 0 ? (
+            <View className="mt-5 rounded-2xl bg-slate-50 p-4">
+              <Text className="text-xs font-bold tracking-wider text-slate-500">
+                COMPLETE ITINERARY
+              </Text>
+
+              <View className="mt-3">
+                <Text className="text-xs font-semibold text-slate-400">
+                  STARTING POINT
+                </Text>
+                <Text className="mt-1 text-sm font-bold text-slate-900">
+                  {trip.from_location}
+                </Text>
+              </View>
+
+              {trip.destinations
+                .slice()
+                .sort(
+                  (a, b) =>
+                    (a.sequence_order ?? 0) - (b.sequence_order ?? 0)
+                )
+                .map((destination, index) => (
+                  <View
+                    key={destination.id || `${trip.id}-destination-${index}`}
+                    className="mt-3 border-l-2 border-blue-400 pl-3"
+                  >
+                    <Text className="text-xs font-semibold text-slate-400">
+                      DESTINATION {index + 1}
+                    </Text>
+                    <Text className="mt-1 text-sm font-bold text-slate-900">
+                      {destination.destination_name}
+                    </Text>
+                    {destination.segment_distance_km !== null &&
+                    destination.segment_distance_km !== undefined ? (
+                      <Text className="mt-1 text-xs font-medium text-blue-700">
+                        {Number(destination.segment_distance_km).toFixed(2)} km from previous stop
+                      </Text>
+                    ) : null}
+                  </View>
+                ))}
+
+              {trip.total_distance_km !== null &&
+              trip.total_distance_km !== undefined ? (
+                <View className="mt-4 border-t border-slate-200 pt-3">
+                  <Text className="text-xs font-semibold text-slate-500">
+                    TOTAL ROAD DISTANCE
+                  </Text>
+                  <Text className="mt-1 text-xl font-extrabold text-blue-700">
+                    {Number(trip.total_distance_km).toFixed(2)} km
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
 
           {/* DATES */}
           <View className="mt-5 border-t border-gray-100 pt-4">
@@ -369,6 +445,26 @@ export default function MyTripsScreen() {
               </Text>
             </View>
           </View>
+
+          {/* VEHICLE DETAILS */}
+          {(trip.vehicle_name || trip.vehicle_number) ? (
+            <View className="mt-3 flex-row flex-wrap gap-2">
+              {trip.vehicle_name ? (
+                <View className="rounded-full bg-slate-100 px-3 py-2">
+                  <Text className="text-xs font-semibold text-slate-700">
+                    🚘 {trip.vehicle_name}
+                  </Text>
+                </View>
+              ) : null}
+              {trip.vehicle_number ? (
+                <View className="rounded-full bg-slate-100 px-3 py-2">
+                  <Text className="text-xs font-semibold text-slate-700">
+                    {trip.vehicle_number}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
 
           {/* CREATOR DETAILS FOR JOINED TRIPS */}
           {type === "joined" && trip.creator_name ? (

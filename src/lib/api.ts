@@ -1,4 +1,25 @@
-const API_URL = "http://192.168.31.159:3000";
+const API_URL = "http://192.168.31.159:3000";// Home
+// const API_URL = "http://10.84.190.96:3000"; //amogh 
+
+// ===============================
+// BACKEND CONNECTION CHECK
+// ===============================
+
+export async function checkBackend() {
+  try {
+    const response = await fetch(`${API_URL}/api/health`);
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.message || "Backend unavailable");
+    }
+
+    return result;
+  } catch (error) {
+    console.error("Backend connection error:", error);
+    throw error;
+  }
+}
 import { supabase } from "./supabase";
 // ===============================
 // PROFILE
@@ -68,18 +89,39 @@ export async function getProfile(id: string) {
 // TRIPS
 // ===============================
 
-type CreateTripData = {
+export type TripDestinationInput = {
+  destination_name: string;
+  latitude: number;
+  longitude: number;
+};
+
+export type CreateTripData = {
   creator_id: string;
+
+  // Starting point and final destination are retained
+  // for compatibility with existing trip screens and APIs.
   from_location: string;
   to_location: string;
   pickup_latitude: number;
   pickup_longitude: number;
+
+  // Multi-destination fixed itinerary fields.
+  // Optional until the Create Trip screen is upgraded in Step 4.
+  trip_name?: string;
+  destinations?: TripDestinationInput[];
+
   trip_date: string;
   trip_end_date: string;
   departure_time: string;
   available_seats: number;
   trip_cost: number;
   travel_type: string;
+
+  // Required by the backend for personal vehicle types
+  // when a new multi-destination itinerary is submitted.
+  vehicle_name?: string;
+  vehicle_number?: string;
+
   description?: string;
 };
 
