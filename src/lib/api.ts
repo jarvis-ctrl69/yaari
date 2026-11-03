@@ -650,3 +650,132 @@ export async function getTripAttendance(tripId: string) {
 
   return result;
 }
+
+
+// ========================================
+// RATINGS & REVIEWS
+// ========================================
+
+export type TripReviewMember = {
+  id: string;
+  name: string;
+  has_reviewed: boolean;
+  rating: number | null;
+  review_text: string | null;
+  reviewed_at: string | null;
+};
+
+export type TripReviewProgress = {
+  required: number;
+  submitted: number;
+  remaining: number;
+  completed: boolean;
+};
+
+export type TripReviewMembersResponse = {
+  success: boolean;
+  trip: {
+    id: string;
+    trip_name: string | null;
+    status: string;
+    creator_id: string;
+  };
+  members: TripReviewMember[];
+  progress: TripReviewProgress;
+};
+
+// Get members who the current user needs to review
+export async function getTripReviewMembers(tripId: string) {
+  const token = await getMessagingToken();
+
+  const response = await fetch(
+    `${API_URL}/api/reviews/trip/${tripId}`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(result.message || "Failed to fetch review members");
+  }
+
+  return result as TripReviewMembersResponse;
+}
+
+// Submit a review for a trip member
+export async function submitTripReview(
+  tripId: string,
+  revieweeId: string,
+  rating: number,
+  reviewText: string
+) {
+  const token = await getMessagingToken();
+
+  const response = await fetch(
+    `${API_URL}/api/reviews/trip/${tripId}`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        reviewee_id: revieweeId,
+        rating,
+        review_text: reviewText,
+      }),
+    }
+  );
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(result.message || "Failed to submit review");
+  }
+
+  return result;
+}
+
+// Get reviews received by a profile
+export async function getProfileReviews(profileId: string) {
+  const token = await getMessagingToken();
+
+  const response = await fetch(
+    `${API_URL}/api/reviews/profile/${profileId}`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(result.message || "Failed to fetch profile reviews");
+  }
+
+  return result as {
+    success: boolean;
+    summary: {
+      average_rating: number;
+      total_reviews: number;
+    };
+    reviews: {
+      id: string;
+      trip_id: string;
+      rating: number;
+      review_text: string;
+      created_at: string;
+      reviewer_name: string;
+      trip_name: string | null;
+    }[];
+  };
+}
+

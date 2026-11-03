@@ -1,3 +1,4 @@
+
 import { Router } from "express";
 import { pool } from "../db";
 
@@ -139,22 +140,38 @@ router.get("/", async (_req, res) => {
     const result = await pool.query(
       `
       SELECT
-        id,
-        name,
-        age,
-        gender,
-        company_email,
-        phone,
-        company,
-        job_role,
-        city,
-        interests,
-        bio,
-        preferred_travel_type,
-        profile_image_url,
-        created_at
-      FROM profiles
-      ORDER BY created_at DESC
+        p.id,
+        p.name,
+        p.age,
+        p.gender,
+        p.company_email,
+        p.phone,
+        p.company,
+        p.job_role,
+        p.city,
+        p.interests,
+        p.bio,
+        p.preferred_travel_type,
+        p.profile_image_url,
+        p.created_at,
+
+        COALESCE(
+          (
+            SELECT ROUND(AVG(r.rating), 1)
+            FROM trip_reviews r
+            WHERE r.reviewee_id = p.id
+          ),
+          0
+        ) AS average_rating,
+
+        (
+          SELECT COUNT(*)::INTEGER
+          FROM trip_reviews r
+          WHERE r.reviewee_id = p.id
+        ) AS total_reviews
+
+      FROM profiles p
+      ORDER BY p.created_at DESC
       `
     );
 
@@ -206,7 +223,22 @@ router.get("/:id", async (req, res) => {
           FROM trip_requests tr
           WHERE tr.requester_id = p.id
             AND tr.status = 'accepted'
-        ) AS trips_joined
+        ) AS trips_joined,
+
+        COALESCE(
+          (
+            SELECT ROUND(AVG(r.rating), 1)
+            FROM trip_reviews r
+            WHERE r.reviewee_id = p.id
+          ),
+          0
+        ) AS average_rating,
+
+        (
+          SELECT COUNT(*)::INTEGER
+          FROM trip_reviews r
+          WHERE r.reviewee_id = p.id
+        ) AS total_reviews
 
       FROM profiles p
       WHERE p.id = $1

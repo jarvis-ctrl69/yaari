@@ -28,9 +28,10 @@ type Profile = {
   preferred_travel_type?: string;
   profile_image_url?: string;
 
-  // YAARI activity statistics
   trips_created: number;
   trips_joined: number;
+  average_rating?: number | string;
+  total_reviews?: number | string;
 };
 
 export default function ProfileTabScreen() {
@@ -59,6 +60,8 @@ export default function ProfileTabScreen() {
             ...data,
             trips_created: Number(data.trips_created ?? 0),
             trips_joined: Number(data.trips_joined ?? 0),
+            average_rating: Number(data.average_rating ?? 0),
+            total_reviews: Number(data.total_reviews ?? 0),
           });
         }
 
@@ -69,7 +72,6 @@ export default function ProfileTabScreen() {
           const createdTrips = tripData.createdTrips || [];
           const joinedTrips = tripData.joinedTrips || [];
 
-          // Combine both lists and prevent duplicate trips.
           const uniqueTrips = new Map();
 
           [...createdTrips, ...joinedTrips].forEach((trip: any) => {
@@ -137,6 +139,9 @@ export default function ProfileTabScreen() {
   const initial =
     profile.name?.charAt(0).toUpperCase() || "Y";
 
+  const averageRating = Number(profile.average_rating ?? 0);
+  const totalReviews = Number(profile.total_reviews ?? 0);
+
   return (
     <ScrollView
       className="flex-1 bg-gray-50"
@@ -154,40 +159,62 @@ export default function ProfileTabScreen() {
           <Card>
             <View className="items-center">
 
-              {/* PROFILE PHOTO / INITIAL */}
               <View className="h-28 w-28 items-center justify-center rounded-full bg-blue-100">
                 <Text className="text-4xl font-bold text-blue-600">
                   {initial}
                 </Text>
               </View>
 
-              {/* NAME */}
               <Text className="mt-5 text-2xl font-bold text-gray-900">
                 {profile.name}
               </Text>
 
-              {/* JOB */}
               {profile.job_role ? (
                 <Text className="mt-1 text-base text-gray-500">
                   {profile.job_role}
                 </Text>
               ) : null}
 
-              {/* COMPANY */}
               {profile.company ? (
                 <Text className="mt-1 text-base font-semibold text-blue-600">
                   {profile.company}
                 </Text>
               ) : null}
 
-              {/* LOCATION */}
               {profile.city ? (
                 <Text className="mt-2 text-sm text-gray-500">
                   📍 {profile.city}
                 </Text>
               ) : null}
 
-              {/* EDIT PROFILE */}
+              {/* MEMBER RATING */}
+              <View className="mt-5 w-full rounded-xl bg-blue-50 p-4">
+                <Text className="text-center text-sm font-semibold text-gray-600">
+                  YAARI Member Rating
+                </Text>
+
+                <Text className="mt-2 text-center text-3xl font-bold text-gray-900">
+                  ⭐ {averageRating.toFixed(1)} / 5
+                </Text>
+
+                <Text className="mt-1 text-center text-sm text-gray-500">
+                  Based on {totalReviews}{" "}
+                  {totalReviews === 1 ? "review" : "reviews"}
+                </Text>
+
+                <View className="mt-4">
+                  <Button
+                    title="View Reviews"
+                    onPress={() =>
+                      router.push({
+                        pathname: "/profile-reviews/[profileId]",
+                        params: { profileId: profile.id },
+                      })
+                    }
+                  />
+                </View>
+              </View>
+
               <View className="mt-6 w-full">
                 <Button
                   title="Edit Profile"
@@ -219,11 +246,9 @@ export default function ProfileTabScreen() {
             </Text>
 
             <View className="mt-5">
-
               <Text className="text-sm font-semibold text-gray-500">
                 Age
               </Text>
-
               <Text className="mt-1 text-base text-gray-900">
                 {profile.age}
               </Text>
@@ -231,7 +256,6 @@ export default function ProfileTabScreen() {
               <Text className="mt-4 text-sm font-semibold text-gray-500">
                 Gender
               </Text>
-
               <Text className="mt-1 text-base text-gray-900">
                 {profile.gender}
               </Text>
@@ -239,7 +263,6 @@ export default function ProfileTabScreen() {
               <Text className="mt-4 text-sm font-semibold text-gray-500">
                 Company Email
               </Text>
-
               <Text className="mt-1 text-base text-gray-900">
                 {profile.company_email}
               </Text>
@@ -247,11 +270,9 @@ export default function ProfileTabScreen() {
               <Text className="mt-4 text-sm font-semibold text-gray-500">
                 Phone
               </Text>
-
               <Text className="mt-1 text-base text-gray-900">
                 {profile.phone}
               </Text>
-
             </View>
           </Card>
         </View>
@@ -264,11 +285,9 @@ export default function ProfileTabScreen() {
             </Text>
 
             <View className="mt-5">
-
               <Text className="text-sm font-semibold text-gray-500">
                 Preferred Travel Type
               </Text>
-
               <Text className="mt-1 text-base text-gray-900">
                 {profile.preferred_travel_type || "Not specified"}
               </Text>
@@ -276,11 +295,9 @@ export default function ProfileTabScreen() {
               <Text className="mt-4 text-sm font-semibold text-gray-500">
                 Interests
               </Text>
-
               <Text className="mt-1 text-base leading-6 text-gray-900">
                 {profile.interests || "No interests added yet."}
               </Text>
-
             </View>
           </Card>
         </View>
@@ -293,43 +310,34 @@ export default function ProfileTabScreen() {
             </Text>
 
             <View className="mt-5 flex-row justify-between">
-
-              {/* TRIPS CREATED */}
               <View className="items-center">
                 <Text className="text-2xl font-bold text-blue-600">
                   {profile.trips_created}
                 </Text>
-
                 <Text className="mt-1 text-sm text-gray-500">
                   Trips Created
                 </Text>
               </View>
 
-              {/* TRIPS JOINED */}
               <View className="items-center">
                 <Text className="text-2xl font-bold text-blue-600">
                   {profile.trips_joined}
                 </Text>
-
                 <Text className="mt-1 text-sm text-gray-500">
                   Trips Joined
                 </Text>
               </View>
 
-              {/* COMPLETED */}
               <View className="items-center">
                 <Text className="text-2xl font-bold text-blue-600">
                   {completedTrips}
                 </Text>
-
                 <Text className="mt-1 text-sm text-gray-500">
                   Completed
                 </Text>
               </View>
-
             </View>
 
-            {/* TRIP HISTORY BUTTON */}
             <View className="mt-6 w-full">
               <Button
                 title="View My Trip History"
@@ -366,7 +374,6 @@ export default function ProfileTabScreen() {
             </Text>
 
             <View className="mt-5 gap-3">
-
               <Button
                 title="Settings"
                 onPress={() => {}}
@@ -381,7 +388,6 @@ export default function ProfileTabScreen() {
                 title="Safety"
                 onPress={() => {}}
               />
-
             </View>
           </Card>
         </View>

@@ -10,7 +10,11 @@ import {
 import { router, useFocusEffect } from "expo-router";
 
 import { supabase } from "@/lib/supabase";
-import { getMyTrips } from "@/lib/api";
+import {
+  getMyTrips,
+  getTripReviewMembers,
+  TripReviewProgress,
+} from "@/lib/api";
 
 type Destination = {
   id?: string;
@@ -41,6 +45,7 @@ type TripSectionProps = {
   title: string;
   trips: Trip[];
   emptyMessage: string;
+  reviewProgress: Record<string, TripReviewProgress | null>;
 };
 
 function formatDate(date?: string) {
@@ -65,7 +70,10 @@ function TripSection({
   title,
   trips,
   emptyMessage,
+  reviewProgress,
 }: TripSectionProps) {
+  const isCompletedSection = title === "Completed Trips";
+
   return (
     <View className="mt-7">
       <View className="mb-3 flex-row items-center justify-between">
@@ -85,100 +93,157 @@ function TripSection({
           </Text>
         </View>
       ) : (
-        trips.map((trip) => (
-          <View
-            key={trip.id}
-            className="mb-4 rounded-2xl border border-gray-200 bg-white p-4"
-          >
-            <Text className="text-lg font-bold text-gray-900">
-              {trip.trip_name || "YAARI Trip"}
-            </Text>
+        trips.map((trip) => {
+          const progress = reviewProgress[trip.id];
 
-            <Text className="mt-2 text-sm text-gray-500">
-              {formatDate(trip.trip_date)} -{" "}
-              {formatDate(trip.trip_end_date)}
-            </Text>
-
-            <View className="mt-4">
-              <Text className="text-sm font-semibold text-gray-500">
-                Starting Point
+          return (
+            <View
+              key={trip.id}
+              className="mb-4 rounded-2xl border border-gray-200 bg-white p-4"
+            >
+              <Text className="text-lg font-bold text-gray-900">
+                {trip.trip_name || "YAARI Trip"}
               </Text>
 
-              <Text className="mt-1 text-base text-gray-900">
-                {trip.from_location}
-              </Text>
-            </View>
-
-            <View className="mt-3">
-              <Text className="text-sm font-semibold text-gray-500">
-                Itinerary
+              <Text className="mt-2 text-sm text-gray-500">
+                {formatDate(trip.trip_date)} -{" "}
+                {formatDate(trip.trip_end_date)}
               </Text>
 
-              {trip.destinations && trip.destinations.length > 0 ? (
-                trip.destinations
-                  .slice()
-                  .sort(
-                    (a, b) =>
-                      a.sequence_order - b.sequence_order
-                  )
-                  .map((destination, index) => (
-                    <Text
-                      key={
-                        destination.id ||
-                        `${trip.id}-${index}`
-                      }
-                      className="mt-1 text-sm text-gray-800"
-                    >
-                      {index + 1}. {destination.destination_name}
-                      {destination.segment_distance_km != null
-                        ? ` • ${Number(
-                            destination.segment_distance_km
-                          ).toFixed(2)} km`
-                        : ""}
-                    </Text>
-                  ))
-              ) : (
-                <Text className="mt-1 text-sm text-gray-800">
-                  {trip.to_location}
+              <View className="mt-4">
+                <Text className="text-sm font-semibold text-gray-500">
+                  Starting Point
                 </Text>
+
+                <Text className="mt-1 text-base text-gray-900">
+                  {trip.from_location}
+                </Text>
+              </View>
+
+              <View className="mt-3">
+                <Text className="text-sm font-semibold text-gray-500">
+                  Itinerary
+                </Text>
+
+                {trip.destinations && trip.destinations.length > 0 ? (
+                  trip.destinations
+                    .slice()
+                    .sort(
+                      (a, b) =>
+                        a.sequence_order - b.sequence_order
+                    )
+                    .map((destination, index) => (
+                      <Text
+                        key={
+                          destination.id ||
+                          `${trip.id}-${index}`
+                        }
+                        className="mt-1 text-sm text-gray-800"
+                      >
+                        {index + 1}. {destination.destination_name}
+                        {destination.segment_distance_km != null
+                          ? ` • ${Number(
+                              destination.segment_distance_km
+                            ).toFixed(2)} km`
+                          : ""}
+                      </Text>
+                    ))
+                ) : (
+                  <Text className="mt-1 text-sm text-gray-800">
+                    {trip.to_location}
+                  </Text>
+                )}
+              </View>
+
+              <View className="mt-4 flex-row flex-wrap justify-between">
+                <View>
+                  <Text className="text-xs text-gray-500">
+                    Total Road Distance
+                  </Text>
+
+                  <Text className="mt-1 font-bold text-gray-900">
+                    {trip.total_distance_km != null
+                      ? `${Number(trip.total_distance_km).toFixed(2)} km`
+                      : "Not available"}
+                  </Text>
+                </View>
+
+                <View className="items-end">
+                  <Text className="text-xs text-gray-500">
+                    Trip Role
+                  </Text>
+
+                  <Text className="mt-1 font-semibold text-gray-900">
+                    {trip.isCreatedByMe ? "Creator" : "Member"}
+                  </Text>
+                </View>
+              </View>
+
+              {trip.vehicle_name ? (
+                <Text className="mt-3 text-sm text-gray-600">
+                  Vehicle: {trip.vehicle_name}
+                </Text>
+              ) : null}
+
+              <Text className="mt-3 text-xs font-semibold uppercase text-gray-500">
+                {trip.status.replace("_", " ")}
+              </Text>
+
+              {isCompletedSection && (
+                <View className="mt-4 border-t border-gray-100 pt-4">
+                  <Text className="text-sm font-semibold text-gray-700">
+                    Ratings & Reviews
+                  </Text>
+
+                  {progress ? (
+                    <>
+                      <Text className="mt-2 text-sm text-gray-600">
+                        {progress.completed
+                          ? "All reviews submitted!"
+                          : `${progress.submitted} of ${progress.required} reviews submitted`}
+                      </Text>
+
+                      <View className="mt-2 h-2 overflow-hidden rounded-full bg-gray-200">
+                        <View
+                          className="h-2 rounded-full bg-green-500"
+                          style={{
+                            width:
+                              progress.required === 0
+                                ? "100%"
+                                : `${Math.min(
+                                    (progress.submitted /
+                                      progress.required) *
+                                      100,
+                                    100
+                                  )}%`,
+                          }}
+                        />
+                      </View>
+                    </>
+                  ) : (
+                    <Text className="mt-2 text-sm text-gray-500">
+                      Review progress is currently unavailable.
+                    </Text>
+                  )}
+
+                  <Pressable
+                    onPress={() =>
+                      router.push({
+                        pathname: "/trip-reviews/[tripId]",
+                        params: { tripId: trip.id },
+                      })
+                    }
+                    className="mt-4 items-center rounded-xl bg-blue-600 px-4 py-3"
+                  >
+                    <Text className="font-semibold text-white">
+                      Review Members
+                    </Text>
+                  </Pressable>
+                </View>
               )}
             </View>
-
-            <View className="mt-4 flex-row flex-wrap justify-between">
-              <View>
-                <Text className="text-xs text-gray-500">
-                  Total Road Distance
-                </Text>
-
-                <Text className="mt-1 font-bold text-gray-900">
-                  {trip.total_distance_km != null
-                    ? `${Number(trip.total_distance_km).toFixed(2)} km`
-                    : "Not available"}
-                </Text>
-              </View>
-
-              <View className="items-end">
-                <Text className="text-xs text-gray-500">
-                  Trip Role
-                </Text>
-
-                <Text className="mt-1 font-semibold text-gray-900">
-                  {trip.isCreatedByMe ? "Creator" : "Member"}
-                </Text>
-              </View>
-            </View>
-
-            {trip.vehicle_name ? (
-              <Text className="mt-3 text-sm text-gray-600">
-                Vehicle: {trip.vehicle_name}
-              </Text>
-            ) : null}
-
-            <Text className="mt-3 text-xs font-semibold uppercase text-gray-500">
-              {trip.status.replace("_", " ")}
-            </Text>
-          </View>
-        ))
+          );
+        })
       )}
     </View>
   );
@@ -186,6 +251,9 @@ function TripSection({
 
 export default function TripHistoryScreen() {
   const [trips, setTrips] = useState<Trip[]>([]);
+  const [reviewProgress, setReviewProgress] = useState<
+    Record<string, TripReviewProgress | null>
+  >({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -193,6 +261,7 @@ export default function TripHistoryScreen() {
     try {
       setLoading(true);
       setError("");
+      setReviewProgress({});
 
       const {
         data: { user },
@@ -237,6 +306,45 @@ export default function TripHistoryScreen() {
       );
 
       setTrips(sortedTrips);
+
+      // Fetch review progress only for completed trips.
+      const completed = sortedTrips.filter(
+        (trip) => trip.status === "completed"
+      );
+
+      const progressResults = await Promise.all(
+        completed.map(async (trip) => {
+          try {
+            const reviewResult = await getTripReviewMembers(trip.id);
+
+            return {
+              tripId: trip.id,
+              progress: reviewResult.progress,
+            };
+          } catch (reviewError) {
+            console.error(
+              `Review progress error for trip ${trip.id}:`,
+              reviewError
+            );
+
+            return {
+              tripId: trip.id,
+              progress: null,
+            };
+          }
+        })
+      );
+
+      const progressMap: Record<
+        string,
+        TripReviewProgress | null
+      > = {};
+
+      progressResults.forEach((item) => {
+        progressMap[item.tripId] = item.progress;
+      });
+
+      setReviewProgress(progressMap);
     } catch (err) {
       console.error("Trip history error:", err);
 
@@ -345,18 +453,21 @@ export default function TripHistoryScreen() {
           title="Upcoming Trips"
           trips={upcomingTrips}
           emptyMessage="No upcoming trips yet."
+          reviewProgress={reviewProgress}
         />
 
         <TripSection
           title="Ongoing Trips"
           trips={ongoingTrips}
           emptyMessage="You don't have any ongoing trips."
+          reviewProgress={reviewProgress}
         />
 
         <TripSection
           title="Completed Trips"
           trips={completedTrips}
           emptyMessage="Your completed journeys will appear here."
+          reviewProgress={reviewProgress}
         />
       </View>
     </ScrollView>

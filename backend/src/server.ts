@@ -13,7 +13,8 @@ import tripRequestRoutes from "./routes/tripRequestRoutes";
 import groupRoutes from "./routes/groupRoutes";
 import messageRoutes from "./routes/messageRoutes";
 import checkinRoutes from "./routes/checkinRoutes";
-  
+import reviewRoutes from "./routes/reviewRoutes";
+
 dotenv.config();
 
 const app = express();
@@ -38,6 +39,8 @@ app.use("/api/groups", groupRoutes);
 app.use("/api/messages", messageRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/checkin", checkinRoutes);
+app.use("/api/reviews", reviewRoutes);
+
 
 app.get("/api/health", (_req, res) => {
   res.json({
