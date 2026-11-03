@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -10,7 +11,7 @@ import { router } from "expo-router";
 import Card from "@/components/Card";
 import Button from "@/components/Button";
 import { supabase } from "@/lib/supabase";
-import { getProfile } from "@/lib/api";
+import { getProfile, getMyTrips } from "@/lib/api";
 
 type Profile = {
   id: string;
@@ -27,7 +28,7 @@ type Profile = {
   preferred_travel_type?: string;
   profile_image_url?: string;
 
-  // Yaari activity statistics
+  // YAARI activity statistics
   trips_created: number;
   trips_joined: number;
 };
@@ -35,6 +36,7 @@ type Profile = {
 export default function ProfileTabScreen() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [completedTrips, setCompletedTrips] = useState(0);
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -49,6 +51,7 @@ export default function ProfileTabScreen() {
           return;
         }
 
+        // LOAD PROFILE
         const data = await getProfile(user.id);
 
         if (data) {
@@ -57,6 +60,36 @@ export default function ProfileTabScreen() {
             trips_created: Number(data.trips_created ?? 0),
             trips_joined: Number(data.trips_joined ?? 0),
           });
+        }
+
+        // LOAD COMPLETED TRIP COUNT
+        try {
+          const tripData = await getMyTrips(user.id);
+
+          const createdTrips = tripData.createdTrips || [];
+          const joinedTrips = tripData.joinedTrips || [];
+
+          // Combine both lists and prevent duplicate trips.
+          const uniqueTrips = new Map();
+
+          [...createdTrips, ...joinedTrips].forEach((trip: any) => {
+            if (!uniqueTrips.has(trip.id)) {
+              uniqueTrips.set(trip.id, trip);
+            }
+          });
+
+          const allTrips = Array.from(uniqueTrips.values());
+
+          const completedCount = allTrips.filter(
+            (trip: any) => trip.status === "completed"
+          ).length;
+
+          setCompletedTrips(completedCount);
+        } catch (tripError) {
+          console.error(
+            "Failed to load completed trip count:",
+            tripError
+          );
         }
       } catch (error) {
         console.error("Failed to load profile:", error);
@@ -286,7 +319,7 @@ export default function ProfileTabScreen() {
               {/* COMPLETED */}
               <View className="items-center">
                 <Text className="text-2xl font-bold text-blue-600">
-                  —
+                  {completedTrips}
                 </Text>
 
                 <Text className="mt-1 text-sm text-gray-500">
@@ -296,9 +329,17 @@ export default function ProfileTabScreen() {
 
             </View>
 
+            {/* TRIP HISTORY BUTTON */}
+            <View className="mt-6 w-full">
+              <Button
+                title="View My Trip History"
+                onPress={() => router.push("/trip-history")}
+              />
+            </View>
+
             <Text className="mt-5 text-center text-sm text-gray-500">
-              Your Yaari activity will update automatically as you
-              create and join trips.
+              Your YAARI activity updates as you create, join and
+              complete trips.
             </Text>
           </Card>
         </View>
@@ -311,7 +352,7 @@ export default function ProfileTabScreen() {
             </Text>
 
             <Text className="mt-3 text-base leading-6 text-gray-600">
-              Your Yaari activity and successful trips will help build
+              Your YAARI activity and successful trips will help build
               your community profile over time.
             </Text>
           </Card>
